@@ -31,11 +31,33 @@
         <i class="bi bi-list fs-5"></i>
       </button>
       <span class="topbar-title">AI Trading Agent</span>
-      <span class="angel-badge" [class.disconnected]="!angelConnected">
-        <i class="bi" [class.bi-wifi]="angelConnected" [class.bi-wifi-off]="!angelConnected"></i>
-        {{ angelConnected ? 'Angel Connected' : 'Not Connected' }}
+
+      <!-- Server status badge -->
+      <span class="server-badge" [class.offline]="!serverOnline" (click)="toggleServerCmd()" title="Click for start command">
+        <i class="bi" [class.bi-circle-fill]="serverOnline" [class.bi-circle]="!serverOnline"></i>
+        {{ serverOnline ? 'Server Online' : 'Server Offline' }}
       </span>
+
+      <!-- Angel Connected badge (only shown when server is up) -->
+      @if (serverOnline) {
+        <span class="angel-badge" [class.disconnected]="!angelConnected">
+          <i class="bi" [class.bi-wifi]="angelConnected" [class.bi-wifi-off]="!angelConnected"></i>
+          {{ angelConnected ? 'Angel Connected' : 'Not Connected' }}
+        </span>
+      }
     </div>
+
+    <!-- Start server command popup -->
+    @if (showServerCmd) {
+      <div class="server-cmd-bar">
+        <i class="bi bi-terminal me-2 text-warning"></i>
+        <span class="text-secondary small me-2">Run in terminal:</span>
+        <code class="server-cmd-code">{{ startCmd }}</code>
+        <button class="btn btn-sm btn-outline-secondary ms-2 py-0" (click)="showServerCmd = false">
+          <i class="bi bi-x"></i>
+        </button>
+      </div>
+    }
 
     <!-- Page content -->
     <div class="page-body">

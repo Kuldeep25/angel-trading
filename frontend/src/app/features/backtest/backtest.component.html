@@ -13,9 +13,34 @@
           }
         </select>
       </div>
-      <div class="col-6 col-md-2">
+      <div class="col-6 col-md-2" style="position:relative">
         <label class="form-label small">Symbol</label>
-        <input class="form-control" [(ngModel)]="symbol">
+        <div class="input-group">
+          <input class="form-control" placeholder="Search…"
+            [(ngModel)]="symbolQuery"
+            (input)="onSymbolInput()"
+            (focus)="onSymbolInput()"
+            (blur)="hideDropdown()"
+            autocomplete="off">
+          @if (symbolLoading) {
+            <span class="input-group-text"><span class="spinner-border spinner-border-sm"></span></span>
+          }
+        </div>
+        @if (showDropdown && symbolResults.length > 0) {
+          <div class="symbol-dropdown">
+            @for (item of symbolResults; track item.raw_symbol) {
+              <div class="symbol-item" (mousedown)="selectSymbol(item)">
+                <span class="symbol-name">{{ item.symbol }}</span>
+                @if (item.expiry) {
+                  <span class="symbol-meta text-secondary ms-2">{{ item.expiry }}</span>
+                }
+                @if (item.lot_size > 1) {
+                  <span class="symbol-meta text-accent ms-2">Lot: {{ item.lot_size }}</span>
+                }
+              </div>
+            }
+          </div>
+        }
       </div>
       <div class="col-6 col-md-2">
         <label class="form-label small">Instrument Type</label>
@@ -49,18 +74,19 @@
         <label class="form-label small">To Date</label>
         <input class="form-control" type="date" [(ngModel)]="toDate">
       </div>
-      <div class="col-6 col-md-2">
+      <div class="col-4 col-md-2">
         <label class="form-label small">SL %</label>
         <input class="form-control" type="number" step="0.5" [(ngModel)]="slPct">
       </div>
-      <div class="col-6 col-md-2">
+      <div class="col-4 col-md-2">
         <label class="form-label small">Trailing SL %</label>
         <input class="form-control" type="number" step="0.5" [(ngModel)]="tslPct">
       </div>
-      <div class="col-12 col-md-4 d-flex align-items-end">
+      <div class="col-4 col-md-2 d-flex align-items-end">
         <button class="btn btn-accent w-100" (click)="run()" [disabled]="running">
           <i class="bi" [class.bi-play-fill]="!running" [class.bi-hourglass-split]="running"></i>
-          {{ running ? 'Running…' : 'Run Backtest' }}
+          <span class="d-none d-xl-inline">{{ running ? 'Running…' : 'Run Backtest' }}</span>
+          <span class="d-xl-none">{{ running ? '…' : 'Run' }}</span>
         </button>
       </div>
     </div>
@@ -90,26 +116,16 @@
     }
     &nbsp;| Lot size: <strong>{{ result.config?.lot_size ?? 1 }}</strong>
   </div>
-  <!-- Metric tiles -->
-  <div class="row g-3 mb-4">
+  <!-- Metric tiles — 10 tiles: 2×5 on xl, 2×4+2 on md, 2-col on mobile -->
+  <div class="row g-2 mb-4">
     @for (m of metricCards(); track m.label) {
-      <div class="col-6 col-md-3">
+      <div class="col-6 col-md-3 col-xl">
         <div class="metric-tile">
           <div class="metric-label"><i class="bi {{ m.icon }} me-1"></i>{{ m.label }}</div>
           <div class="metric-value" [ngClass]="m.cls">{{ m.value }}</div>
         </div>
       </div>
     }
-  </div>
-
-  <!-- Final Equity -->
-  <div class="row g-3 mb-4">
-    <div class="col-6 col-md-3">
-      <div class="metric-tile">
-        <div class="metric-label"><i class="bi bi-wallet2 me-1"></i>Final Equity</div>
-        <div class="metric-value">₹{{ result.summary.final_equity | number:'1.0-0' }}</div>
-      </div>
-    </div>
   </div>
 
   <!-- Equity curve chart -->

@@ -256,6 +256,87 @@ def get_expiries(underlying: str) -> List[str]:
     return sorted(expiries)
 
 
+def search_instruments(query: str, instrument_type: str = "equity", limit: int = 50) -> List[Dict]:
+    """
+    Search instruments by query string, filtered by instrument_type.
+
+    instrument_type: 'equity' | 'futures' | 'options'
+
+    Returns list of dicts with keys:
+      symbol, raw_symbol, name, exchange, lot_size, expiry?, option_type?
+    """
+    ensure_loaded()
+    from datetime import date as _date
+    today = _date.today()
+    itype = instrument_type.lower()
+    q_upper = query.strip().upper()
+
+    results: List[Dict] = []
+
+    for rec in _by_symbol_exchange.values():
+        exch = rec.get("exch_seg", "").upper()
+        inst = rec.get("instrumenttype", "").upper()
+        sym: str = rec.get("symbol", "")
+        name: str = rec.get("name", "")
+
+        if itype == "equity":
+            if exch not in ("NSE", "BSE"):
+                continue
+            if inst not in ("", "EQ", "BE", "SM", "ST", "GS"):
+                continue
+        elif itype == "futures":
+            if exch != "NFO":
+                continue
+            if inst not in ("FUTIDX", "FUTSTK"):
+                continue
+            expiry_str = rec.get("expiry", "")
+            try:
+                exp = datetime.strptime(expiry_str, "%d%b%Y").date()
+                if exp < today:
+                    continue
+            except ValueError:
+                continue
+        elif itype == "options":
+            if exch != "NFO":
+                continue
+            if inst not in ("OPTIDX", "OPTSTK"):
+                continue
+            expiry_str = rec.get("expiry", "")
+            try:
+                exp = datetime.strptime(expiry_str, "%d%b%Y").date()
+                if exp < today:
+                    continue
+            except ValueError:
+                continue
+        else:
+            continue
+
+        if q_upper and q_upper not in sym.upper() and q_upper not in name.upper():
+            continue
+
+        item: Dict = {
+            "symbol": name if itype == "equity" else sym,
+            "raw_symbol": sym,
+            "name": name,
+            "exchange": exch,
+            "lot_size": int(rec.get("lotsize", 1) or 1),
+        }
+        if itype in ("futures", "options"):
+            item["expiry"] = rec.get("expiry", "")
+            item["option_type"] = rec.get("optiontype", "")
+
+        results.append(item)
+        if len(results) >= limit * 3:  # fetch extra for sorting
+            break
+
+    def sort_key(r: Dict) -> tuple:
+        s = r["symbol"].upper()
+        return (0 if s.startswith(q_upper) else 1, s)
+
+    results.sort(key=sort_key)
+    return results[:limit]
+
+
 def search_equity(query: str, exchange: str = "NSE") -> List[Dict]:
     """Simple fuzzy search by name/symbol for equity."""
     ensure_loaded()

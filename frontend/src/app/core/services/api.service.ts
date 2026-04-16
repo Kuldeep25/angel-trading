@@ -51,6 +51,15 @@ export class ApiService {
     return this.http.post(`${BASE}/backtest`, payload);
   }
 
+  // ── Symbols ──────────────────────────────────────────────────────────────
+  searchSymbols(q: string, instrumentType: string, limit = 50): Observable<any[]> {
+    const params = new HttpParams()
+      .set('q', q)
+      .set('instrument_type', instrumentType)
+      .set('limit', limit);
+    return this.http.get<any[]>(`${BASE}/symbols`, { params });
+  }
+
   // ── Live trading ─────────────────────────────────────────────────────────
   startTrading(payload: any): Observable<any> {
     return this.http.post(`${BASE}/live/start`, payload);

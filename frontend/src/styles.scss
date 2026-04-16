@@ -126,12 +126,85 @@ html, body {
       border-color: rgba(248, 81, 73, 0.3);
     }
   }
+
+  .server-badge {
+    font-size: 0.75rem;
+    background: rgba(63, 185, 80, 0.15);
+    color: var(--success);
+    border: 1px solid rgba(63, 185, 80, 0.3);
+    padding: 0.2rem 0.6rem;
+    border-radius: 20px;
+    cursor: pointer;
+    user-select: none;
+    transition: opacity 0.15s;
+    &:hover { opacity: 0.8; }
+    i { font-size: 0.55rem; vertical-align: middle; margin-right: 0.2rem; }
+    &.offline {
+      background: rgba(248, 81, 73, 0.15);
+      color: var(--danger);
+      border-color: rgba(248, 81, 73, 0.3);
+    }
+  }
 }
 
 .page-body {
   flex: 1;
   overflow-y: auto;
   padding: 1.5rem;
+}
+
+.server-cmd-bar {
+  background: #161b22;
+  border-bottom: 1px solid var(--bs-border-color);
+  padding: 0.4rem 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+
+  .server-cmd-code {
+    background: #0d1117;
+    border: 1px solid var(--bs-border-color);
+    border-radius: 4px;
+    padding: 0.15rem 0.5rem;
+    font-size: 0.78rem;
+    color: var(--warning);
+    flex: 1;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Symbol typeahead dropdown
+// ─────────────────────────────────────────────────────────────────────────────
+.symbol-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 1050;
+  background: #1c2128;
+  border: 1px solid var(--bs-border-color);
+  border-radius: 0 0 0.5rem 0.5rem;
+  max-height: 260px;
+  overflow-y: auto;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+
+  .symbol-item {
+    padding: 0.45rem 0.75rem;
+    cursor: pointer;
+    display: flex;
+    align-items: baseline;
+    gap: 0.25rem;
+    font-size: 0.85rem;
+    border-bottom: 1px solid rgba(48,54,61,0.5);
+    &:last-child { border-bottom: none; }
+    &:hover { background: rgba(88,166,255,0.1); }
+
+    .symbol-name { font-weight: 500; color: var(--bs-body-color); }
+    .symbol-meta  { font-size: 0.75rem; }
+    .text-accent  { color: var(--accent); }
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
