@@ -27,6 +27,7 @@ class BacktestConfig:
     strategy_name: str
     symbol: str
     exchange: str = "NSE"
+    instrument_type: str = "equity"   # equity | futures | options
     interval: str = "ONE_DAY"
     from_date: str = ""   # "YYYY-MM-DD HH:MM"
     to_date: str = ""     # "YYYY-MM-DD HH:MM"
@@ -55,13 +56,24 @@ def run_backtest(cfg: BacktestConfig) -> Dict[str, Any]:
     }
     """
     # ── 1. Resolve symbol token ─────────────────────────────────────────────
-    token = get_token(cfg.symbol, cfg.exchange)
+    # For futures/options the user picks NFO exchange for lot size purposes,
+    # but the underlying price data lives on NSE/BSE.  Resolve the data-fetch
+    # exchange separately so we never try get_token('RELIANCE', 'NFO').
+    itype = cfg.instrument_type.lower()
+    data_exchange = cfg.exchange
+    if itype in ("futures", "options") and cfg.exchange.upper() in ("NFO", "BFO", "MCX"):
+        # Try to find the symbol on NSE first; fall back to BSE
+        data_exchange = "NSE"
+        if get_token(cfg.symbol, "NSE") is None and get_token(cfg.symbol, "BSE") is not None:
+            data_exchange = "BSE"
+
+    token = get_token(cfg.symbol, data_exchange)
     resolved_symbol   = cfg.symbol
-    resolved_exchange = cfg.exchange
+    resolved_exchange = data_exchange
 
     if token is None:
         raise ValueError(
-            f"Symbol '{cfg.symbol}' not found on exchange '{cfg.exchange}'. "
+            f"Symbol '{cfg.symbol}' not found on exchange '{data_exchange}'. "
             "Make sure the instrument master is loaded."
         )
 
@@ -156,12 +168,21 @@ def run_backtest(cfg: BacktestConfig) -> Dict[str, Any]:
         )
 
     # ── 4. Simulate trades ──────────────────────────────────────────────────
-    # Use resolved symbol/exchange so NIFTY→NIFTY28APR26FUT gives lot=65 not 1
-    lot_size = get_lot_size(resolved_symbol, resolved_exchange)
-    if lot_size <= 1:
-        # Further fallback: look up by underlying name (handles equity options)
-        lot_size = get_lot_size(cfg.symbol, cfg.exchange)
-    logger.info("Lot size for %s (%s): %d", resolved_symbol, resolved_exchange, lot_size)
+    # Lot size rules:
+    #   equity  → always 1 (buy any number of shares)
+    #   futures → NFO lot size of the underlying (e.g. NIFTY=65, RELIANCE=500)
+    #   options → same NFO lot size as futures
+    if itype == "equity":
+        lot_size = 1
+    else:
+        # cfg.exchange is NFO (user-selected); resolved_exchange is NSE (data).
+        # Always look up lot size against NFO, not the data exchange.
+        lot_size = get_lot_size(resolved_symbol, cfg.exchange)
+        if lot_size <= 1:
+            lot_size = get_lot_size(cfg.symbol, "NFO")
+        if lot_size <= 1:
+            lot_size = 1   # absolute fallback
+    logger.info("Lot size for %s (%s) [%s]: %d", resolved_symbol, resolved_exchange, itype, lot_size)
     trades   = _simulate(df, cfg, lot_size)
 
     # ── 5. Compute metrics ──────────────────────────────────────────────────
@@ -173,6 +194,7 @@ def run_backtest(cfg: BacktestConfig) -> Dict[str, Any]:
             "symbol": cfg.symbol,
             "resolved_symbol": resolved_symbol,
             "exchange": cfg.exchange,
+            "instrument_type": cfg.instrument_type,
             "interval": cfg.interval,
             "from_date": cfg.from_date,
             "to_date": cfg.to_date,

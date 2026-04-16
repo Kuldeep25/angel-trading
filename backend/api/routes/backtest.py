@@ -11,6 +11,7 @@ def backtest(req: BacktestRequest):
         strategy_name     = req.strategy_name,
         symbol            = req.symbol,
         exchange          = req.exchange,
+        instrument_type   = req.instrument_type,
         interval          = req.interval,
         from_date         = req.from_date,
         to_date           = req.to_date,

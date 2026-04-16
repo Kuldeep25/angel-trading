@@ -26,6 +26,13 @@ export class BacktestComponent implements OnInit {
   slPct = 1.5;
   tslPct = 2.0;
 
+  instrumentType: 'equity' | 'futures' | 'options' = 'equity';
+  instrumentTypes = [
+    { value: 'equity',  label: 'Equity' },
+    { value: 'futures', label: 'Futures' },
+    { value: 'options', label: 'Options' },
+  ];
+
   strategies: any[] = [];
   exchanges = ['NSE', 'BSE', 'NFO', 'MCX'];
   intervals = ['ONE_MINUTE','THREE_MINUTE','FIVE_MINUTE','TEN_MINUTE','FIFTEEN_MINUTE',
@@ -67,6 +74,14 @@ export class BacktestComponent implements OnInit {
 
   fmt(d: Date): string { return d.toISOString().split('T')[0]; }
 
+  onInstrumentTypeChange(): void {
+    if (this.instrumentType === 'equity') {
+      this.exchange = 'NSE';
+    } else {
+      this.exchange = 'NFO';
+    }
+  }
+
   run(): void {
     if (!this.strategyName) { this.error = 'Select a strategy.'; return; }
     this.error = '';
@@ -76,6 +91,7 @@ export class BacktestComponent implements OnInit {
       strategy_name: this.strategyName,
       symbol: this.symbol.toUpperCase(),
       exchange: this.exchange,
+      instrument_type: this.instrumentType,
       interval: this.interval,
       from_date: this.fromDate,
       to_date: this.toDate,

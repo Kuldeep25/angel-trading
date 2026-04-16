@@ -18,6 +18,14 @@
         <input class="form-control" [(ngModel)]="symbol">
       </div>
       <div class="col-6 col-md-2">
+        <label class="form-label small">Instrument Type</label>
+        <select class="form-select" [(ngModel)]="instrumentType" (ngModelChange)="onInstrumentTypeChange()">
+          @for (t of instrumentTypes; track t.value) {
+            <option [value]="t.value">{{ t.label }}</option>
+          }
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
         <label class="form-label small">Exchange</label>
         <select class="form-select" [(ngModel)]="exchange">
           @for (e of exchanges; track e) { <option>{{ e }}</option> }

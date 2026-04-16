@@ -6,6 +6,7 @@ class BacktestRequest(BaseModel):
     strategy_name: str
     symbol: str
     exchange: str = "NSE"
+    instrument_type: str = "equity"   # equity | futures | options
     interval: str = "ONE_DAY"
     from_date: str = Field(..., description="YYYY-MM-DD HH:MM")
     to_date: str   = Field(..., description="YYYY-MM-DD HH:MM")
