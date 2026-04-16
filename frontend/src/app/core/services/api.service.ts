@@ -1,0 +1,97 @@
+import { Injectable } from '@angular/core';
+import { HttpClient, HttpParams } from '@angular/common/http';
+import { Observable } from 'rxjs';
+
+const BASE = 'http://localhost:8000';
+
+@Injectable({ providedIn: 'root' })
+export class ApiService {
+  constructor(private http: HttpClient) {}
+
+  // ── Health ──────────────────────────────────────────────────────────────
+  ping(): Observable<any> {
+    return this.http.get(`${BASE}/ping`);
+  }
+
+  // ── Strategies ──────────────────────────────────────────────────────────
+  listStrategies(): Observable<any[]> {
+    return this.http.get<any[]>(`${BASE}/strategies/list`);
+  }
+
+  getStrategy(name: string): Observable<any> {
+    return this.http.get(`${BASE}/strategies/${name}`);
+  }
+
+  addStrategy(payload: any): Observable<any> {
+    return this.http.post(`${BASE}/strategies/add`, payload);
+  }
+
+  editStrategy(name: string, payload: any): Observable<any> {
+    return this.http.put(`${BASE}/strategies/edit/${name}`, payload);
+  }
+
+  deleteStrategy(name: string): Observable<any> {
+    return this.http.delete(`${BASE}/strategies/delete/${name}`);
+  }
+
+  copyStrategy(sourceName: string, newName: string): Observable<any> {
+    return this.http.post(`${BASE}/strategies/copy/${sourceName}/${newName}`, {});
+  }
+
+  toggleStrategy(name: string, enabled: boolean): Observable<any> {
+    return this.http.patch(`${BASE}/strategies/toggle/${name}?enabled=${enabled}`, {});
+  }
+
+  setStrategyMode(name: string, mode: string): Observable<any> {
+    return this.http.patch(`${BASE}/strategies/mode/${name}?mode=${mode}`, {});
+  }
+
+  // ── Backtest ─────────────────────────────────────────────────────────────
+  runBacktest(payload: any): Observable<any> {
+    return this.http.post(`${BASE}/backtest`, payload);
+  }
+
+  // ── Live trading ─────────────────────────────────────────────────────────
+  startTrading(payload: any): Observable<any> {
+    return this.http.post(`${BASE}/live/start`, payload);
+  }
+
+  stopTrading(strategyName?: string, symbol?: string): Observable<any> {
+    let url = `${BASE}/live/stop`;
+    const params: string[] = [];
+    if (strategyName) params.push(`strategy_name=${encodeURIComponent(strategyName)}`);
+    if (symbol) params.push(`symbol=${encodeURIComponent(symbol)}`);
+    if (params.length) url += '?' + params.join('&');
+    return this.http.post(url, {});
+  }
+
+  tradingStatus(): Observable<any[]> {
+    return this.http.get<any[]>(`${BASE}/live/status`);
+  }
+
+  // ── Positions ────────────────────────────────────────────────────────────
+  getPositions(): Observable<any> {
+    return this.http.get(`${BASE}/positions`);
+  }
+
+  exitPosition(symbol: string, paper = true): Observable<any> {
+    return this.http.post(`${BASE}/positions/exit/${symbol}?paper=${paper}`, {});
+  }
+
+  exitAllPositions(paper = true): Observable<any> {
+    return this.http.post(`${BASE}/positions/exit-all?paper=${paper}`, {});
+  }
+
+  // ── Voice ────────────────────────────────────────────────────────────────
+  executeVoiceCommand(text: string): Observable<any> {
+    return this.http.post(`${BASE}/voice/execute`, { text });
+  }
+
+  voiceListen(): Observable<any> {
+    return this.http.post(`${BASE}/voice/listen`, {});
+  }
+
+  getVoiceCommands(): Observable<any> {
+    return this.http.get(`${BASE}/voice/commands`);
+  }
+}

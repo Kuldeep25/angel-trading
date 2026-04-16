@@ -1,0 +1,56 @@
+{
+  "commands": {
+    "buy {symbol} call": {
+      "action": "buy_call",
+      "description": "Buy ATM call option for symbol"
+    },
+    "buy {symbol} put": {
+      "action": "buy_put",
+      "description": "Buy ATM put option for symbol"
+    },
+    "sell {symbol} call": {
+      "action": "sell_call",
+      "description": "Sell ATM call option for symbol"
+    },
+    "sell {symbol} put": {
+      "action": "sell_put",
+      "description": "Sell ATM put option for symbol"
+    },
+    "buy {symbol}": {
+      "action": "buy_equity",
+      "description": "Buy equity/futures for symbol"
+    },
+    "sell {symbol}": {
+      "action": "sell_equity",
+      "description": "Sell equity/futures for symbol"
+    },
+    "sell all positions": {
+      "action": "exit_all",
+      "description": "Exit all open positions"
+    },
+    "exit all": {
+      "action": "exit_all",
+      "description": "Exit all open positions"
+    },
+    "set stop loss {value}": {
+      "action": "set_stoploss",
+      "description": "Set stop loss percent or points"
+    },
+    "show positions": {
+      "action": "show_positions",
+      "description": "Return current positions"
+    },
+    "show pnl": {
+      "action": "show_pnl",
+      "description": "Return current PnL"
+    },
+    "start trading": {
+      "action": "start_trading",
+      "description": "Activate live/paper trading"
+    },
+    "stop trading": {
+      "action": "stop_trading",
+      "description": "Deactivate live/paper trading"
+    }
+  }
+}

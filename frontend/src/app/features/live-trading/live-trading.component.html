@@ -1,0 +1,170 @@
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+  <h4 class="mb-0"><i class="bi bi-activity me-2 text-accent"></i>Live Trading</h4>
+  <div class="d-flex gap-2">
+    @if (tradingStatus.running) {
+      <button class="btn btn-outline-danger btn-sm" (click)="stopTrading()">
+        <i class="bi bi-stop-fill me-1"></i> Stop All
+      </button>
+    }
+    <button class="btn btn-accent btn-sm" (click)="showModal = true">
+      <i class="bi bi-play-fill me-1"></i> Start Strategy
+    </button>
+  </div>
+</div>
+
+<!-- Status ribbon -->
+<div class="card mb-4">
+  <div class="card-body py-2 d-flex align-items-center gap-3 flex-wrap">
+    <span>
+      <i class="bi me-1" [class.bi-circle-fill]="tradingStatus.running"
+         [class.bi-circle]="!tradingStatus.running"
+         [class.text-success]="tradingStatus.running"
+         [class.text-secondary]="!tradingStatus.running"></i>
+      {{ tradingStatus.running ? 'Running' : 'Idle' }}
+    </span>
+    @for (s of tradingStatus.active_strategies; track s) {
+      <span class="badge bg-primary">{{ s }}</span>
+    }
+    <span class="ms-auto text-secondary small">Auto-refresh every 5 s</span>
+  </div>
+</div>
+
+<!-- PnL summary -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="metric-tile">
+      <div class="metric-label">Live PnL</div>
+      <div class="metric-value" [ngClass]="pnlClass(positions.live_pnl)">
+        ₹{{ positions.live_pnl | number:'1.0-0' }}
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="metric-tile">
+      <div class="metric-label">Paper PnL</div>
+      <div class="metric-value" [ngClass]="pnlClass(positions.paper_pnl)">
+        ₹{{ positions.paper_pnl | number:'1.0-0' }}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Tabs -->
+<ul class="nav nav-tabs mb-3">
+  <li class="nav-item">
+    <button class="nav-link" [class.active]="activeTab === 'paper'" (click)="activeTab = 'paper'">
+      Paper <span class="badge bg-secondary ms-1">{{ positions.paper.length }}</span>
+    </button>
+  </li>
+  <li class="nav-item">
+    <button class="nav-link" [class.active]="activeTab === 'live'" (click)="activeTab = 'live'">
+      Live <span class="badge bg-secondary ms-1">{{ positions.live.length }}</span>
+    </button>
+  </li>
+</ul>
+
+@if (currentPositions().length === 0) {
+  <div class="text-center py-5 text-secondary">
+    <i class="bi bi-inbox fs-1 d-block mb-2"></i>No {{ activeTab }} positions.
+  </div>
+}
+
+@if (currentPositions().length > 0) {
+  <div class="card mb-3">
+    <div class="card-header py-2 d-flex justify-content-between align-items-center">
+      <span>Positions</span>
+      <button class="btn btn-outline-danger btn-sm" (click)="exitAll()">
+        <i class="bi bi-x-circle me-1"></i> Exit All
+      </button>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Symbol</th><th>Qty</th><th>Avg ₹</th>
+            <th>LTP ₹</th><th>Unrealised</th><th>Realised</th><th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (p of currentPositions(); track p.symbol) {
+            <tr>
+              <td class="fw-semibold">{{ p.symbol }}</td>
+              <td>{{ p.net_qty ?? p.quantity }}</td>
+              <td>{{ p.avg_price | number:'1.2-2' }}</td>
+              <td>{{ p.ltp | number:'1.2-2' }}</td>
+              <td [ngClass]="pnlClass(p.unrealised_pnl)">
+                ₹{{ p.unrealised_pnl | number:'1.0-0' }}
+              </td>
+              <td [ngClass]="pnlClass(p.realised_pnl)">
+                ₹{{ p.realised_pnl | number:'1.0-0' }}
+              </td>
+              <td>
+                <button class="btn btn-outline-danger btn-sm" (click)="exit(p.symbol)">
+                  Exit
+                </button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </div>
+}
+
+<!-- Start modal -->
+@if (showModal) {
+  <div class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,0.6)">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Start Strategy</h5>
+          <button type="button" class="btn-close" (click)="showModal = false"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label small">Strategy</label>
+            <select class="form-select" [(ngModel)]="modalForm.strategy">
+              <option value="">Select…</option>
+              @for (s of strategies; track s.name) {
+                <option [value]="s.name">{{ s.name }}</option>
+              }
+            </select>
+          </div>
+          <div class="row g-2">
+            <div class="col-6">
+              <label class="form-label small">Symbol</label>
+              <input class="form-control" [(ngModel)]="modalForm.symbol">
+            </div>
+            <div class="col-6">
+              <label class="form-label small">Exchange</label>
+              <select class="form-select" [(ngModel)]="modalForm.exchange">
+                @for (e of exchanges; track e) { <option>{{ e }}</option> }
+              </select>
+            </div>
+            <div class="col-12">
+              <label class="form-label small">Interval</label>
+              <select class="form-select" [(ngModel)]="modalForm.interval">
+                @for (i of intervals; track i) { <option>{{ i }}</option> }
+              </select>
+            </div>
+            <div class="col-12">
+              <div class="form-check form-switch mt-2">
+                <input class="form-check-input" type="checkbox" id="paperMode" [(ngModel)]="modalForm.paper">
+                <label class="form-check-label" for="paperMode">Paper Trading (safe)</label>
+              </div>
+            </div>
+          </div>
+          @if (error) {
+            <div class="text-danger small mt-2">{{ error }}</div>
+          }
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" (click)="showModal = false">Cancel</button>
+          <button class="btn btn-accent" (click)="startTrading()" [disabled]="loading">
+            {{ loading ? 'Starting…' : 'Start' }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+}

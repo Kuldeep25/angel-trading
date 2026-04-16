@@ -1,0 +1,45 @@
+<div class="app-layout">
+  <!-- Sidebar overlay (mobile) -->
+  <div class="sidebar-overlay" [class.visible]="sidebarOpen" (click)="closeSidebar()"></div>
+
+  <!-- Sidebar -->
+  <nav class="sidebar" [class.open]="sidebarOpen">
+    <div class="sidebar-brand">
+      <i class="bi bi-graph-up-arrow"></i> AI Trader
+    </div>
+    <ul class="nav flex-column mt-2">
+      @for (item of navItems; track item.path) {
+        <li class="nav-item">
+          <a class="nav-link" [routerLink]="item.path" routerLinkActive="active" (click)="closeSidebar()">
+            <i class="bi" [class]="item.icon"></i>
+            {{ item.label }}
+          </a>
+        </li>
+      }
+    </ul>
+    <div class="mt-auto p-3 small text-secondary border-top" style="border-color: var(--bs-border-color) !important;">
+      Angel One SmartAPI<br>
+      <span class="text-warning">Personal Use Only</span>
+    </div>
+  </nav>
+
+  <!-- Main content -->
+  <div class="main-content">
+    <!-- Top bar -->
+    <div class="topbar">
+      <button class="btn btn-sm btn-outline-secondary d-md-none" (click)="toggleSidebar()">
+        <i class="bi bi-list fs-5"></i>
+      </button>
+      <span class="topbar-title">AI Trading Agent</span>
+      <span class="angel-badge" [class.disconnected]="!angelConnected">
+        <i class="bi" [class.bi-wifi]="angelConnected" [class.bi-wifi-off]="!angelConnected"></i>
+        {{ angelConnected ? 'Angel Connected' : 'Not Connected' }}
+      </span>
+    </div>
+
+    <!-- Page content -->
+    <div class="page-body">
+      <router-outlet />
+    </div>
+  </div>
+</div>

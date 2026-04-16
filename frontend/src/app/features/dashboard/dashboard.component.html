@@ -1,0 +1,122 @@
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h4 class="mb-0"><i class="bi bi-grid-1x2 me-2 text-accent"></i>Strategies</h4>
+  <a routerLink="/strategy-editor" class="btn btn-accent btn-sm">
+    <i class="bi bi-plus-lg me-1"></i> New Strategy
+  </a>
+</div>
+
+@if (loading) {
+  <div class="text-center py-5">
+    <div class="spinner-border text-primary" role="status"></div>
+    <p class="mt-2 text-secondary">Loading strategies…</p>
+  </div>
+}
+
+@if (error) {
+  <div class="alert alert-danger d-flex align-items-center gap-2">
+    <i class="bi bi-exclamation-triangle-fill"></i> {{ error }}
+  </div>
+}
+
+@if (!loading && !error) {
+  @if (strategies.length === 0) {
+    <div class="text-center py-5 text-secondary">
+      <i class="bi bi-inbox fs-1 d-block mb-3"></i>
+      No strategies yet. <a routerLink="/strategy-editor" class="text-accent">Create one</a>.
+    </div>
+  }
+
+  <div class="row g-3">
+    @for (s of strategies; track s.name) {
+      <div class="col-12 col-sm-6 col-xl-4">
+        <div class="card strategy-card">
+          <div class="card-body d-flex flex-column gap-2">
+            <!-- Header row -->
+            <div class="d-flex align-items-start justify-content-between">
+              <div>
+                <h6 class="mb-1 fw-semibold">{{ s.name }}</h6>
+                <span class="badge category-badge" [ngClass]="categoryClass(s.category)">
+                  {{ s.category }}
+                </span>
+              </div>
+              <div class="d-flex gap-1">
+                <button class="btn btn-outline-secondary btn-sm" title="Edit"
+                        [routerLink]="['/strategy-editor', s.name]">
+                  <i class="bi bi-pencil"></i>
+                </button>
+                <button class="btn btn-outline-secondary btn-sm" title="Copy"
+                        (click)="openCopyModal(s)">
+                  <i class="bi bi-files"></i>
+                </button>
+                <button class="btn btn-outline-danger btn-sm" title="Delete"
+                        (click)="deleteStrategy(s)">
+                  <i class="bi bi-trash3"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- Description -->
+            @if (s.description) {
+              <p class="small text-secondary mb-0">{{ s.description }}</p>
+            }
+
+            <!-- Toggles -->
+            <div class="d-flex align-items-center gap-3 mt-1">
+              <div class="form-check form-switch mb-0">
+                <input class="form-check-input" type="checkbox" role="switch"
+                       [id]="'enable-' + s.name"
+                       [checked]="s.enabled"
+                       (change)="toggleEnabled(s)">
+                <label class="form-check-label small" [for]="'enable-' + s.name">
+                  {{ s.enabled ? 'Enabled' : 'Disabled' }}
+                </label>
+              </div>
+
+              <div class="form-check form-switch mb-0">
+                <input class="form-check-input" type="checkbox" role="switch"
+                       [id]="'mode-' + s.name"
+                       [checked]="s.mode === 'live'"
+                       (change)="toggleMode(s)">
+                <label class="form-check-label small" [for]="'mode-' + s.name">
+                  {{ s.mode === 'live' ? 'Live' : 'Paper' }}
+                </label>
+              </div>
+            </div>
+
+            <!-- Backtest button -->
+            <a [routerLink]="['/backtest']"
+               [queryParams]="{ strategy: s.name }"
+               class="btn btn-outline-primary btn-sm mt-1">
+              <i class="bi bi-bar-chart-line me-1"></i> Backtest
+            </a>
+          </div>
+        </div>
+      </div>
+    }
+  </div>
+}
+
+<!-- Copy modal -->
+@if (copyModalStrategy) {
+  <div class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,0.6)">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Copy Strategy</h5>
+          <button type="button" class="btn-close" (click)="closeCopyModal()"></button>
+        </div>
+        <div class="modal-body">
+          <label class="form-label small">New strategy name</label>
+          <input class="form-control" [(ngModel)]="copyNewName" placeholder="e.g. my_strategy_v2">
+          @if (copyError) {
+            <div class="text-danger small mt-1">{{ copyError }}</div>
+          }
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" (click)="closeCopyModal()">Cancel</button>
+          <button class="btn btn-primary" (click)="confirmCopy()">Copy</button>
+        </div>
+      </div>
+    </div>
+  </div>
+}

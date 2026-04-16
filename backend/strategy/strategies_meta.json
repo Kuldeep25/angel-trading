@@ -1,0 +1,42 @@
+{
+  "equity_ema_crossover": {
+    "name": "equity_ema_crossover",
+    "file_path": "strategy\\strategies\\equity_ema_crossover.py",
+    "category": "equity",
+    "description": "EMA 9/21 crossover — works on all timeframes.",
+    "enabled": false,
+    "mode": "paper",
+    "created_at": "2026-04-16T17:27:18.499048",
+    "updated_at": "2026-04-16T17:27:18.499048"
+  },
+  "futures_breakout": {
+    "name": "futures_breakout",
+    "file_path": "strategy\\strategies\\futures_breakout.py",
+    "category": "futures",
+    "description": "Opening Range Breakout for intraday futures.",
+    "enabled": false,
+    "mode": "paper",
+    "created_at": "2026-04-16T17:27:18.571812",
+    "updated_at": "2026-04-16T17:27:18.571812"
+  },
+  "options_straddle": {
+    "name": "options_straddle",
+    "file_path": "strategy\\strategies\\options_straddle.py",
+    "category": "options",
+    "description": "ATM Straddle entry at session open.",
+    "enabled": false,
+    "mode": "paper",
+    "created_at": "2026-04-16T17:27:18.652090",
+    "updated_at": "2026-04-16T17:27:18.652090"
+  },
+  "options_supertrend": {
+    "name": "options_supertrend",
+    "file_path": "strategy\\strategies\\options_supertrend.py",
+    "category": "options",
+    "description": "Supertrend-based ATM option buyer — CE on bullish, PE on bearish. Works for index and stock options.",
+    "enabled": false,
+    "mode": "paper",
+    "created_at": "2026-04-17T00:00:00.000000",
+    "updated_at": "2026-04-17T00:00:00.000000"
+  }
+}
