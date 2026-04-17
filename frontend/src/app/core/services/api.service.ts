@@ -98,6 +98,19 @@ export class ApiService {
     return this.http.post(`${BASE}/positions/exit-all?paper=${paper}`, {});
   }
 
+  // ── Position Guards ──────────────────────────────────────────────────────
+  getPositionGuards(): Observable<any> {
+    return this.http.get(`${BASE}/positions/guards`);
+  }
+
+  setPositionGuard(payload: any): Observable<any> {
+    return this.http.post(`${BASE}/positions/guard`, payload);
+  }
+
+  removePositionGuard(symbol: string): Observable<any> {
+    return this.http.delete(`${BASE}/positions/guard/${encodeURIComponent(symbol)}`);
+  }
+
   // ── Voice ────────────────────────────────────────────────────────────────
   executeVoiceCommand(text: string, mode: 'paper' | 'live' = 'paper'): Observable<any> {
     return this.http.post(`${BASE}/voice/execute`, { text, mode });

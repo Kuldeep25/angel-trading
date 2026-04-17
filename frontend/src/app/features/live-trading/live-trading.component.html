@@ -94,7 +94,22 @@
         <tbody>
           @for (p of currentPositions(); track p.symbol) {
             <tr>
-              <td class="fw-semibold">{{ p.symbol }}</td>
+              <td class="fw-semibold">
+                {{ p.symbol }}
+                @if (guards[p.symbol]) {
+                  <div class="d-flex gap-1 mt-1 flex-wrap">
+                    @if (guards[p.symbol].sl_price > 0) {
+                      <span class="badge bg-danger" style="font-size:0.65rem">SL ₹{{ guards[p.symbol].sl_price }}</span>
+                    }
+                    @if (guards[p.symbol].target_price > 0) {
+                      <span class="badge bg-success" style="font-size:0.65rem">◎ ₹{{ guards[p.symbol].target_price }}</span>
+                    }
+                    @if (guards[p.symbol].tsl_pct > 0) {
+                      <span class="badge bg-warning text-dark" style="font-size:0.65rem">TSL {{ guards[p.symbol].tsl_pct }}%</span>
+                    }
+                  </div>
+                }
+              </td>
               <td>{{ p.net_qty ?? p.quantity }}</td>
               <td>{{ p.avg_price | number:'1.2-2' }}</td>
               <td>{{ p.ltp | number:'1.2-2' }}</td>
@@ -105,6 +120,36 @@
                 ₹{{ p.realised_pnl | number:'1.0-0' }}
               </td>
               <td>
+                <button class="btn btn-sm me-1"
+                        title="Set Stop Loss / Target / Trailing SL"
+                        [class.btn-outline-warning]="!guards[p.symbol]"
+                        [class.btn-warning]="!!guards[p.symbol]"
+                        (click)="openGuard(p)">
+                  <i class="bi bi-shield-check"></i>
+                </button>
+                @if (guards[p.symbol]) {
+                  <button class="btn btn-sm btn-outline-secondary" title="Remove guard"
+                          (click)="removeGuard(p.symbol)">
+                    <i class="bi bi-shield-x"></i>
+                  </button>
+                }
+              </td>
+              <td>
+                <button class="btn btn-sm me-1"
+                        title="Set Stop Loss / Target / Trailing SL"
+                        [class.btn-outline-warning]="!guards[p.symbol]"
+                        [class.btn-warning]="!!guards[p.symbol]"
+                        (click)="openGuard(p)">
+                  <i class="bi bi-shield-check"></i>
+                </button>
+                @if (guards[p.symbol]) {
+                  <button class="btn btn-sm btn-outline-secondary" title="Remove guard"
+                          (click)="removeGuard(p.symbol)">
+                    <i class="bi bi-shield-x"></i>
+                  </button>
+                }
+              </td>
+              <td>
                 <button class="btn btn-outline-danger btn-sm" (click)="exit(p.symbol)">
                   Exit
                 </button>
@@ -113,6 +158,132 @@
           }
         </tbody>
       </table>
+    </div>
+  </div>
+}
+
+<!-- Guard modal -->
+@if (guardModal) {
+  <div class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,0.6)">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-shield-check me-2"></i>Position Guard</h5>
+          <button type="button" class="btn-close" (click)="guardModal = false"></button>
+        </div>
+        <div class="modal-body">
+          <div class="fw-semibold mb-3 text-accent">{{ guardForm.symbol }}</div>
+          <p class="text-secondary small mb-3">Set any combination. Leave 0 to disable that condition. Checked every 5 s.</p>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Stop Loss Price (₹)</label>
+            <input type="number" class="form-control" [(ngModel)]="guardForm.sl_price" min="0" step="0.05">
+            <div class="form-text">Exit if LTP drops to or below this price.</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Target Price (₹)</label>
+            <input type="number" class="form-control" [(ngModel)]="guardForm.target_price" min="0" step="0.05">
+            <div class="form-text">Exit if LTP rises to or above this price.</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Trailing SL (%)</label>
+            <input type="number" class="form-control" [(ngModel)]="guardForm.tsl_pct" min="0" max="50" step="0.1">
+            <div class="form-text">Exit if LTP falls X% from the highest point after guard was set. Checked before fixed SL.</div>
+          </div>
+          @if (error) {
+            <div class="text-danger small">{{ error }}</div>
+          }
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary btn-sm" (click)="guardModal = false">Cancel</button>
+          <button class="btn btn-accent btn-sm" (click)="saveGuard()">
+            <i class="bi bi-shield-check me-1"></i>Set Guard
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- Guard modal -->
+@if (guardModal) {
+  <div class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,0.6)">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-shield-check me-2"></i>Position Guard</h5>
+          <button type="button" class="btn-close" (click)="guardModal = false"></button>
+        </div>
+        <div class="modal-body">
+          <div class="fw-semibold mb-3 text-accent">{{ guardForm.symbol }}</div>
+          <p class="text-secondary small mb-3">Leave 0 to disable a condition. Checked every 5 s automatically.</p>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Stop Loss Price (₹)</label>
+            <input type="number" class="form-control" [(ngModel)]="guardForm.sl_price" min="0" step="0.05">
+            <div class="form-text">Exit if LTP drops to or below this price.</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Target Price (₹)</label>
+            <input type="number" class="form-control" [(ngModel)]="guardForm.target_price" min="0" step="0.05">
+            <div class="form-text">Exit if LTP rises to or above this price.</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Trailing SL (%)</label>
+            <input type="number" class="form-control" [(ngModel)]="guardForm.tsl_pct" min="0" max="50" step="0.1">
+            <div class="form-text">Exit if LTP falls X% from the highest point after guard is set.</div>
+          </div>
+          @if (error) {
+            <div class="text-danger small">{{ error }}</div>
+          }
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary btn-sm" (click)="guardModal = false">Cancel</button>
+          <button class="btn btn-accent btn-sm" (click)="saveGuard()">
+            <i class="bi bi-shield-check me-1"></i>Set Guard
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- Guard modal -->
+@if (guardModal) {
+  <div class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,0.6)">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-shield-check me-2"></i>Position Guard</h5>
+          <button type="button" class="btn-close" (click)="guardModal = false"></button>
+        </div>
+        <div class="modal-body">
+          <div class="fw-semibold mb-3 text-accent">{{ guardForm.symbol }}</div>
+          <p class="text-secondary small mb-3">Set any combination. Leave 0 to disable that condition. Checked every 5 s.</p>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Stop Loss Price (₹)</label>
+            <input type="number" class="form-control" [(ngModel)]="guardForm.sl_price" min="0" step="0.05">
+            <div class="form-text">Exit if LTP drops to or below this price.</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Target Price (₹)</label>
+            <input type="number" class="form-control" [(ngModel)]="guardForm.target_price" min="0" step="0.05">
+            <div class="form-text">Exit if LTP rises to or above this price.</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Trailing SL (%)</label>
+            <input type="number" class="form-control" [(ngModel)]="guardForm.tsl_pct" min="0" max="50" step="0.1">
+            <div class="form-text">Exit if LTP falls X% from the highest point after guard was set. Checked before fixed SL.</div>
+          </div>
+          @if (error) {
+            <div class="text-danger small">{{ error }}</div>
+          }
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary btn-sm" (click)="guardModal = false">Cancel</button>
+          <button class="btn btn-accent btn-sm" (click)="saveGuard()">
+            <i class="bi bi-shield-check me-1"></i>Set Guard
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 }

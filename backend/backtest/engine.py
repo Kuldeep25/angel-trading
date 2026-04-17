@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional
 import pandas as pd
 
 from angel.symbols import get_token, get_lot_size, get_nearest_futures_token, get_all_futures_tokens
+from backtest.charges import compute_charges
 from backtest.metrics import compute_metrics
 from backtest.models import Trade
 from data.engine import fetch_historical
@@ -210,7 +211,7 @@ def run_backtest(cfg: BacktestConfig) -> Dict[str, Any]:
     trades   = _simulate(df, cfg, lot_size)
 
     # ── 5. Compute metrics ──────────────────────────────────────────────────
-    summary, equity_curve = compute_metrics(trades, cfg.capital)
+    summary, equity_curve = compute_metrics(trades, cfg.capital, cfg.instrument_type)
 
     return {
         "config": {
@@ -436,6 +437,8 @@ def _trade_to_dict(t: Trade) -> Dict[str, Any]:
         "exit_price":   round(t.exit_price,  2),
         "quantity":     t.quantity,
         "pnl":          round(t.pnl, 2),
+        "charges":      round(t.charges, 2),
+        "net_pnl":      round(t.net_pnl, 2),
         "exit_reason":  t.exit_reason,
     }
     if t.atm_strike:

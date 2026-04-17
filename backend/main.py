@@ -88,11 +88,16 @@ async def lifespan(app: FastAPI):
     # 4. Register built-in sample strategies on first run
     _register_sample_strategies()
 
+    # 5. Start position guard monitor (SL / Target / TSL)
+    from execution.paper_trading import guard_engine as _guard_engine
+    _guard_engine.start()
+
     logger.info("=== Startup complete. API ready. ===")
     yield
 
     # ── Shutdown ─────────────────────────────────────────────────────────────
     logger.info("Shutting down…")
+    _guard_engine.stop()
     angel_client.disconnect()
 
 

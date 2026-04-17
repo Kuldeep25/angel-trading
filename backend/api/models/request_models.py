@@ -46,3 +46,12 @@ class LiveStartRequest(BaseModel):
 class VoiceExecuteRequest(BaseModel):
     text: str
     mode: str = "paper"   # "paper" | "live"
+
+
+class PositionGuardRequest(BaseModel):
+    symbol: str
+    exchange: str = "NSE"
+    paper: bool = True
+    sl_price: float = 0.0
+    target_price: float = 0.0
+    tsl_pct: float = 0.0

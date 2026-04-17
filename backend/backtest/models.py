@@ -16,3 +16,5 @@ class Trade:
     exit_reason: str   # "SIGNAL" / "SL" / "TSL" / "EOD"
     atm_strike: float = 0.0   # 0 = not an options trade
     option_type: str  = ""    # "CE" / "PE" / "STRADDLE" / ""
+    charges: float = 0.0      # total statutory + brokerage charges for the round trip
+    net_pnl: float = 0.0      # pnl - charges

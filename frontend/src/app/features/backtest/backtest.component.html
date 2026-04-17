@@ -150,7 +150,63 @@
     }
   </div>
 
-  <!-- Equity curve chart -->
+          <!-- Charges breakdown card -->
+  @if (result.summary?.total_charges > 0) {
+    <div class="card mb-4">
+      <div class="card-header py-2 d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-receipt me-2"></i>Charges Breakdown <span class="badge bg-danger ms-2">₹{{ result.summary.total_charges | number:'1.0-0' }} total</span></span>
+        <button class="btn btn-sm btn-outline-secondary" (click)="showChargeBreakdown = !showChargeBreakdown">
+          <i class="bi" [class.bi-chevron-down]="!showChargeBreakdown" [class.bi-chevron-up]="showChargeBreakdown"></i>
+        </button>
+      </div>
+      @if (showChargeBreakdown) {
+        <div class="card-body">
+          <div class="row g-2">
+            <div class="col-6 col-md-2">
+              <div class="metric-tile">
+                <div class="metric-label">Brokerage</div>
+                <div class="metric-value pnl-negative">₹{{ result.summary.charge_breakdown?.brokerage | number:'1.0-0' }}</div>
+              </div>
+            </div>
+            <div class="col-6 col-md-2">
+              <div class="metric-tile">
+                <div class="metric-label">STT</div>
+                <div class="metric-value pnl-negative">₹{{ result.summary.charge_breakdown?.stt | number:'1.0-0' }}</div>
+              </div>
+            </div>
+            <div class="col-6 col-md-2">
+              <div class="metric-tile">
+                <div class="metric-label">Exc. Charges</div>
+                <div class="metric-value pnl-negative">₹{{ result.summary.charge_breakdown?.exc_charge | number:'1.0-0' }}</div>
+              </div>
+            </div>
+            <div class="col-6 col-md-2">
+              <div class="metric-tile">
+                <div class="metric-label">GST (18%)</div>
+                <div class="metric-value pnl-negative">₹{{ result.summary.charge_breakdown?.gst | number:'1.0-0' }}</div>
+              </div>
+            </div>
+            <div class="col-6 col-md-2">
+              <div class="metric-tile">
+                <div class="metric-label">SEBI Charges</div>
+                <div class="metric-value pnl-negative">₹{{ result.summary.charge_breakdown?.sebi | number:'1.2-2' }}</div>
+              </div>
+            </div>
+            <div class="col-6 col-md-2">
+              <div class="metric-tile">
+                <div class="metric-label">Stamp Duty</div>
+                <div class="metric-value pnl-negative">₹{{ result.summary.charge_breakdown?.stamp | number:'1.0-0' }}</div>
+              </div>
+            </div>
+          </div>
+          <p class="text-secondary small mt-2 mb-0">
+            <i class="bi bi-info-circle me-1"></i>
+            Based on Angel One flat ₹20/order + NSE STT + Exchange txn charges + SEBI ₹10/cr + GST 18% + Stamp duty.
+          </p>
+        </div>
+      }
+    </div>
+  }
   @if (result.equity_curve?.length > 0) {
     <div class="card mb-4">
       <div class="card-header py-2"><i class="bi bi-graph-up me-2"></i>Equity Curve</div>
@@ -189,7 +245,8 @@
                 <th>Strike</th><th>Type</th>
               }
               <th>Entry ₹</th><th>Exit ₹</th>
-              <th>Qty <span class="text-secondary fw-normal small">{{ result.config?.instrument_type === 'equity' ? '(shares)' : '(lots)' }}</span></th><th>PnL ₹</th><th>Exit Reason</th>
+              <th>Qty <span class="text-secondary fw-normal small">{{ result.config?.instrument_type === 'equity' ? '(shares)' : '(lots)' }}</span></th>
+              <th>Gross ₹</th><th>Charges ₹</th><th>Net ₹</th><th>Exit Reason</th>
             </tr>
           </thead>
           <tbody>
@@ -215,8 +272,12 @@
                       <span class="text-secondary small">({{ result.config.lot_size }}×{{ t.quantity / result.config.lot_size | number:'1.0-0' }})</span>
                     }
                   </td>
-                <td [ngClass]="pnlClass(t.pnl)" style="font-weight:700;font-size:0.95rem">
+                <td [ngClass]="pnlClass(t.pnl)" style="font-size:0.9rem">
                   {{ t.pnl >= 0 ? '+' : '' }}₹{{ t.pnl | number:'1.0-0' }}
+                </td>
+                <td class="text-secondary small">₹{{ (t.charges ?? 0) | number:'1.0-0' }}</td>
+                <td [ngClass]="pnlClass(t.net_pnl ?? t.pnl)" style="font-weight:700;font-size:0.95rem">
+                  {{ (t.net_pnl ?? t.pnl) >= 0 ? '+' : '' }}₹{{ (t.net_pnl ?? t.pnl) | number:'1.0-0' }}
                 </td>
                 <td>
                   <span class="badge"

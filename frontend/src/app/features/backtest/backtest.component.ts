@@ -250,21 +250,23 @@ export class BacktestComponent implements OnInit, OnDestroy {
     return pnl >= 0 ? 'pnl-positive' : 'pnl-negative';
   }
 
+  showChargeBreakdown = false;
+
   metricCards(): { label: string; value: string; icon: string; cls: string }[] {
     if (!this.result?.summary) return [];
     const s = this.result.summary;
     const fmt = (n: number) => '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
     return [
-      { label: 'Total Return',    value: s.total_return.toFixed(2) + '%',  icon: 'bi-percent',          cls: s.total_return >= 0 ? 'pnl-positive' : 'pnl-negative' },
-      { label: 'Total P&L',       value: fmt(s.total_pnl),                 icon: 'bi-currency-rupee',   cls: s.total_pnl >= 0 ? 'pnl-positive' : 'pnl-negative' },
-      { label: 'Final Equity',    value: fmt(s.final_equity),              icon: 'bi-wallet2',          cls: '' },
-      { label: 'Max Drawdown',    value: s.max_drawdown.toFixed(2) + '%',  icon: 'bi-arrow-down',       cls: 'pnl-negative' },
-      { label: 'Win Rate',        value: s.win_rate.toFixed(1) + '%',      icon: 'bi-trophy',           cls: s.win_rate >= 50 ? 'pnl-positive' : 'pnl-negative' },
-      { label: 'Sharpe Ratio',    value: s.sharpe_ratio?.toFixed(2) ?? 'N/A', icon: 'bi-graph-up',     cls: s.sharpe_ratio >= 1 ? 'pnl-positive' : '' },
-      { label: 'Winning Trades',  value: String(s.wins ?? 0),              icon: 'bi-hand-thumbs-up',   cls: 'pnl-positive' },
-      { label: 'Losing Trades',   value: String(s.losses ?? 0),            icon: 'bi-hand-thumbs-down', cls: s.losses > 0 ? 'pnl-negative' : '' },
-      { label: 'Total Trades',    value: String(s.total_trades),           icon: 'bi-list-ol',          cls: '' },
-      { label: 'Avg PnL / Trade', value: fmt(s.avg_pnl),                  icon: 'bi-cash',             cls: s.avg_pnl >= 0 ? 'pnl-positive' : 'pnl-negative' },
+      { label: 'Gross P&L',       value: fmt(s.gross_pnl ?? s.total_pnl),   icon: 'bi-currency-rupee',   cls: (s.gross_pnl ?? s.total_pnl) >= 0 ? 'pnl-positive' : 'pnl-negative' },
+      { label: 'Total Charges',   value: fmt(s.total_charges ?? 0),          icon: 'bi-receipt',           cls: 'pnl-negative' },
+      { label: 'Net P&L',         value: fmt(s.total_pnl),                   icon: 'bi-wallet2',           cls: s.total_pnl >= 0 ? 'pnl-positive' : 'pnl-negative' },
+      { label: 'Net Return',      value: s.total_return.toFixed(2) + '%',    icon: 'bi-percent',           cls: s.total_return >= 0 ? 'pnl-positive' : 'pnl-negative' },
+      { label: 'Final Equity',    value: fmt(s.final_equity),                icon: 'bi-bank',              cls: '' },
+      { label: 'Max Drawdown',    value: s.max_drawdown.toFixed(2) + '%',    icon: 'bi-arrow-down',        cls: 'pnl-negative' },
+      { label: 'Win Rate',        value: s.win_rate.toFixed(1) + '%',        icon: 'bi-trophy',            cls: s.win_rate >= 50 ? 'pnl-positive' : 'pnl-negative' },
+      { label: 'Sharpe Ratio',    value: s.sharpe_ratio?.toFixed(2) ?? 'N/A', icon: 'bi-graph-up',        cls: s.sharpe_ratio >= 1 ? 'pnl-positive' : '' },
+      { label: 'Total Trades',    value: String(s.total_trades),             icon: 'bi-list-ol',           cls: '' },
+      { label: 'Avg Net / Trade', value: fmt(s.avg_pnl),                     icon: 'bi-cash',              cls: s.avg_pnl >= 0 ? 'pnl-positive' : 'pnl-negative' },
     ];
   }
 }

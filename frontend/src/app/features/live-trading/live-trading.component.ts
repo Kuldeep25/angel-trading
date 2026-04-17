@@ -27,6 +27,11 @@ export class LiveTradingComponent implements OnInit, OnDestroy {
   intervals = ['ONE_MINUTE','THREE_MINUTE','FIVE_MINUTE','TEN_MINUTE','FIFTEEN_MINUTE',
                'THIRTY_MINUTE','ONE_HOUR','ONE_DAY'];
 
+  // Position guards
+  guards: Record<string, any> = {};
+  guardModal = false;
+  guardForm = { symbol: '', exchange: 'NSE', paper: true, sl_price: 0, target_price: 0, tsl_pct: 0 };
+
   loading = false;
   error = '';
   private pollTimer: any;
@@ -46,6 +51,7 @@ export class LiveTradingComponent implements OnInit, OnDestroy {
     this.loadPositions();
     this.api.listStrategies().subscribe({ next: (s) => this.strategies = s });
     this.api.tradingStatus().subscribe({ next: (s) => this.tradingStatus = s });
+    this.api.getPositionGuards().subscribe({ next: (g) => this.guards = g || {} });
   }
 
   loadPositions(): void {
@@ -87,6 +93,40 @@ export class LiveTradingComponent implements OnInit, OnDestroy {
   }
 
   pnlClass(pnl: number): string { return pnl >= 0 ? 'pnl-positive' : 'pnl-negative'; }
+
+  openGuard(pos: any): void {
+    const ex = this.guards[pos.symbol] || {};
+    this.guardForm = {
+      symbol:       pos.symbol,
+      exchange:     pos.exchange || 'NSE',
+      paper:        this.activeTab === 'paper',
+      sl_price:     ex.sl_price     ?? 0,
+      target_price: ex.target_price ?? 0,
+      tsl_pct:      ex.tsl_pct      ?? 0,
+    };
+    this.error = '';
+    this.guardModal = true;
+  }
+
+  saveGuard(): void {
+    this.api.setPositionGuard(this.guardForm).subscribe({
+      next: (r: any) => {
+        this.guards = { ...this.guards, [this.guardForm.symbol]: r.guard };
+        this.guardModal = false;
+      },
+      error: (e: any) => { this.error = e?.error?.detail || 'Failed to set guard.'; }
+    });
+  }
+
+  removeGuard(symbol: string): void {
+    this.api.removePositionGuard(symbol).subscribe({
+      next: () => {
+        const g = { ...this.guards };
+        delete g[symbol];
+        this.guards = g;
+      }
+    });
+  }
 
   currentPositions(): any[] {
     return this.activeTab === 'live' ? this.positions.live : this.positions.paper;

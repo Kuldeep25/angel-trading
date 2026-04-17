@@ -1,7 +1,8 @@
 from fastapi import APIRouter, HTTPException
 from execution.position_tracker import get_all_positions, get_live_positions, get_paper_positions
 from execution.engine import cancel_order
-from execution.paper_trading import paper_engine
+from execution.paper_trading import paper_engine, guard_engine
+from api.models.request_models import PositionGuardRequest
 
 router = APIRouter()
 
@@ -36,3 +37,26 @@ def exit_all_positions(paper: bool = True):
         orders = paper_engine.exit_all_positions(ltp_map)
         return {"status": "ok", "orders": orders}
     raise HTTPException(status_code=400, detail="Live exit-all not implemented via REST.")
+
+
+# ── Position Guards (SL / Target / TSL) ────────────────────────────────────────
+
+@router.get("/positions/guards")
+def list_guards():
+    return guard_engine.get_guards()
+
+
+@router.post("/positions/guard")
+def set_guard(req: PositionGuardRequest):
+    g = guard_engine.set_guard(
+        req.symbol, req.exchange, req.paper,
+        req.sl_price, req.target_price, req.tsl_pct,
+    )
+    return {"status": "ok", "guard": g}
+
+
+@router.delete("/positions/guard/{symbol}")
+def remove_guard(symbol: str):
+    if not guard_engine.remove_guard(symbol):
+        raise HTTPException(status_code=404, detail=f"No guard for '{symbol}'.")
+    return {"status": "ok"}
