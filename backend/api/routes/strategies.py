@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException
 from typing import Optional
 from api.models.request_models import StrategyAddRequest, StrategyEditRequest
 import strategy.manager as mgr
+from strategy.loader import get_strategy_defaults
 
 router = APIRouter(prefix="/strategies")
 
@@ -18,6 +19,11 @@ def get_strategy(name: str):
         raise HTTPException(status_code=404, detail=f"Strategy '{name}' not found.")
     rec = dict(rec)
     rec["code"] = mgr.get_strategy_code(name)
+    # Inject class-level sl_pct / tsl_pct defaults if the strategy defines them
+    defaults = get_strategy_defaults(rec.get("file_path", ""))
+    rec["default_sl_pct"]     = defaults.get("sl_pct")
+    rec["default_tsl_pct"]    = defaults.get("tsl_pct")
+    rec["default_target_pct"] = defaults.get("target_pct")
     return rec
 
 

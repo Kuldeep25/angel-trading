@@ -1,12 +1,23 @@
 from fastapi import APIRouter, HTTPException
 from api.models.request_models import BacktestRequest
 from backtest.engine import run_backtest, BacktestConfig
+from angel.client import angel_client
 
 router = APIRouter()
 
 
 @router.post("/backtest")
 def backtest(req: BacktestRequest):
+    # Give a clear error immediately if not connected — saves 30s of retries
+    if not angel_client.is_connected:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Angel One is not connected. "
+                "Click the red server badge and use POST /reconnect, "
+                "or restart uvicorn to trigger a fresh login."
+            ),
+        )
     cfg = BacktestConfig(
         strategy_name     = req.strategy_name,
         symbol            = req.symbol,
@@ -18,6 +29,7 @@ def backtest(req: BacktestRequest):
         capital           = req.capital,
         sl_pct            = req.sl_pct,
         tsl_pct           = req.tsl_pct,
+        target_pct        = req.target_pct,
         position_size_pct = req.position_size_pct,
     )
     try:

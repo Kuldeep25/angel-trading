@@ -32,8 +32,9 @@ class BacktestConfig:
     from_date: str = ""   # "YYYY-MM-DD HH:MM"
     to_date: str = ""     # "YYYY-MM-DD HH:MM"
     capital: float = 100_000.0
-    sl_pct: float = 2.0    # stop-loss %
-    tsl_pct: float = 0.0   # trailing stop-loss % (0 = disabled)
+    sl_pct: float = 2.0    # stop-loss %          (0 = disabled)
+    tsl_pct: float = 0.0   # trailing stop-loss %  (0 = disabled)
+    target_pct: float = 0.0  # profit target %     (0 = disabled)
     position_size_pct: float = 95.0  # % of capital to deploy per trade
 
 
@@ -56,16 +57,24 @@ def run_backtest(cfg: BacktestConfig) -> Dict[str, Any]:
     }
     """
     # ── 1. Resolve symbol token ─────────────────────────────────────────────
-    # For futures/options the user picks NFO exchange for lot size purposes,
-    # but the underlying price data lives on NSE/BSE.  Resolve the data-fetch
-    # exchange separately so we never try get_token('RELIANCE', 'NFO').
+    # For futures/options the user picks NFO/BFO/MCX as exchange for lot size
+    # purposes, but the underlying price data lives on a *spot* exchange.
+    # Resolve the data-fetch exchange separately.
     itype = cfg.instrument_type.lower()
-    data_exchange = cfg.exchange
-    if itype in ("futures", "options") and cfg.exchange.upper() in ("NFO", "BFO", "MCX"):
-        # Try to find the symbol on NSE first; fall back to BSE
-        data_exchange = "NSE"
-        if get_token(cfg.symbol, "NSE") is None and get_token(cfg.symbol, "BSE") is not None:
+    deriv_exchange = cfg.exchange.upper()   # NFO | BFO | MCX (or NSE/BSE for equity)
+    data_exchange  = cfg.exchange
+    if itype in ("futures", "options") and deriv_exchange in ("NFO", "BFO", "MCX"):
+        if deriv_exchange == "BFO":
+            # SENSEX / BANKEX / BSE-listed index derivatives → spot data on BSE
             data_exchange = "BSE"
+        elif deriv_exchange == "MCX":
+            # MCX commodities — data is fetched from MCX itself
+            data_exchange = "MCX"
+        else:  # NFO
+            # NIFTY / BANKNIFTY / stocks → NSE spot first, then BSE
+            data_exchange = "NSE"
+            if get_token(cfg.symbol, "NSE") is None and get_token(cfg.symbol, "BSE") is not None:
+                data_exchange = "BSE"
 
     token = get_token(cfg.symbol, data_exchange)
     resolved_symbol   = cfg.symbol
@@ -91,10 +100,10 @@ def run_backtest(cfg: BacktestConfig) -> Dict[str, Any]:
     # For options strategies, fetch a continuous price series from all futures
     # contracts that overlap the requested date range and stitch them together.
     if df.empty:
-        all_futures = get_all_futures_tokens(cfg.symbol)
+        all_futures = get_all_futures_tokens(cfg.symbol, deriv_exchange if itype in ("futures", "options") else "")
         if not all_futures:
             all_futures = []
-            fut = get_nearest_futures_token(cfg.symbol)
+            fut = get_nearest_futures_token(cfg.symbol, deriv_exchange if itype in ("futures", "options") else "")
             if fut:
                 all_futures = [(fut[0], fut[1], fut[2], None)]
 
@@ -138,18 +147,28 @@ def run_backtest(cfg: BacktestConfig) -> Dict[str, Any]:
                 if merged_rows:
                     df = pd.DataFrame(merged_rows).sort_values("timestamp").reset_index(drop=True)
                     resolved_symbol   = frames[0][1]  # first (nearest expiry) contract name
-                    resolved_exchange = "NFO"
+                    resolved_exchange = deriv_exchange if deriv_exchange in ("NFO", "BFO", "MCX") else "NFO"
                     logger.info(
                         "Continuous futures: %d bars total from %d contracts",
                         len(df), len(frames),
                     )
 
     if df.empty:
+        if itype in ("futures", "options"):
+            raise ValueError(
+                f"No historical data returned for '{cfg.symbol}' ({cfg.interval}). "
+                f"For options/futures backtest, the engine fetches data from continuous futures "
+                f"contracts ({deriv_exchange}). Possible causes: "
+                "(1) Angel One session expired — restart the backend, "
+                "(2) the symbol has no active futures contracts, "
+                "(3) the date range has no data for this interval "
+                f"(FIVE_MINUTE max = 100 days, ONE_HOUR max = 400 days)."
+            )
         raise ValueError(
             f"No historical data returned for {cfg.symbol} ({cfg.exchange}, {cfg.interval}). "
             "Angel One does not provide historical data for index tokens (e.g. NIFTY/BANKNIFTY). "
             "Use an equity stock (e.g. RELIANCE on NSE), an ETF (e.g. NIFTYBEES on NSE), "
-            "or a futures contract (e.g. NIFTY26MAY26FUT on NFO)."
+            "or switch Instrument Type to Futures/Options."
         )
 
     logger.info("Backtest data: %d candles for %s %s", len(df), resolved_symbol, cfg.interval)
@@ -167,6 +186,9 @@ def run_backtest(cfg: BacktestConfig) -> Dict[str, Any]:
             "Strategy's generate() must return a DataFrame with a 'signal' column."
         )
 
+    signal_counts = df["signal"].value_counts().to_dict()
+    logger.info("Signal distribution after generate(): %s", signal_counts)
+
     # ── 4. Simulate trades ──────────────────────────────────────────────────
     # Lot size rules:
     #   equity  → always 1 (buy any number of shares)
@@ -175,10 +197,12 @@ def run_backtest(cfg: BacktestConfig) -> Dict[str, Any]:
     if itype == "equity":
         lot_size = 1
     else:
-        # cfg.exchange is NFO (user-selected); resolved_exchange is NSE (data).
-        # Always look up lot size against NFO, not the data exchange.
-        lot_size = get_lot_size(resolved_symbol, cfg.exchange)
+        # Look up lot size from the derivative exchange (NFO, BFO, or MCX).
+        lot_size = get_lot_size(resolved_symbol, deriv_exchange)
         if lot_size <= 1:
+            lot_size = get_lot_size(cfg.symbol, deriv_exchange)
+        # Final NFO fallback for safety (covers stocks that only have NFO contracts)
+        if lot_size <= 1 and deriv_exchange != "NFO":
             lot_size = get_lot_size(cfg.symbol, "NFO")
         if lot_size <= 1:
             lot_size = 1   # absolute fallback
@@ -247,6 +271,9 @@ def _simulate(
         ts     = str(row["timestamp"])
 
         is_opt, trade_price_row, strike_row, opt_type_row = _opt_fields(row)
+        # Equity instrument type always uses real close price, never synthetic option premium
+        if cfg.instrument_type.lower() == "equity":
+            is_opt, trade_price_row, strike_row, opt_type_row = False, price, 0.0, ""
 
         # ── Check stop-loss / trailing stop-loss for open positions ─────────
         if position != 0:
@@ -254,7 +281,7 @@ def _simulate(
             exit_reason = _check_sl_tsl(
                 position, check_price, entry_price,
                 high_since_entry, low_since_entry,
-                cfg.sl_pct, cfg.tsl_pct,
+                cfg.sl_pct, cfg.tsl_pct, cfg.target_pct,
             )
             if exit_reason:
                 pnl = _calc_pnl(position, entry_price, check_price)
@@ -335,8 +362,12 @@ def _check_sl_tsl(
     low_since_entry: float,
     sl_pct: float,
     tsl_pct: float,
+    target_pct: float = 0.0,
 ) -> Optional[str]:
     if position > 0:
+        # Target
+        if target_pct > 0 and price >= entry_price * (1 + target_pct / 100):
+            return "TARGET"
         # Fixed SL
         if sl_pct > 0 and price <= entry_price * (1 - sl_pct / 100):
             return "SL"
@@ -344,6 +375,9 @@ def _check_sl_tsl(
         if tsl_pct > 0 and price <= high_since_entry * (1 - tsl_pct / 100):
             return "TSL"
     elif position < 0:
+        # Target
+        if target_pct > 0 and price <= entry_price * (1 - target_pct / 100):
+            return "TARGET"
         # Fixed SL
         if sl_pct > 0 and price >= entry_price * (1 + sl_pct / 100):
             return "SL"

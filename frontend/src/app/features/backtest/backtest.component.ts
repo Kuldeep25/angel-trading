@@ -21,12 +21,18 @@ export class BacktestComponent implements OnInit, OnDestroy {
   strategyName = '';
   symbol = 'RELIANCE';
   exchange = 'NSE';
-  interval = 'ONE_DAY';
+  interval = 'FIVE_MINUTE';
   fromDate = '';
   toDate = '';
   capital = 100000;
-  slPct = 1.5;
-  tslPct = 2.0;
+  slPct     = 0;   // 0 → use strategy default
+  tslPct    = 0;   // 0 → disabled
+  targetPct = 0;   // 0 → disabled
+
+  // Strategy-level defaults (from py class attributes)
+  defaultSlPct:     number | null = null;
+  defaultTslPct:    number | null = null;
+  defaultTargetPct: number | null = null;
 
   instrumentType: 'equity' | 'futures' | 'options' = 'equity';
   instrumentTypes = [
@@ -40,7 +46,7 @@ export class BacktestComponent implements OnInit, OnDestroy {
   symbolResults: any[] = [];
   showDropdown = false;
   symbolLoading = false;
-  private searchSubject = new Subject<string>();
+  private searchSubject = new Subject<{q: string; type: string}>();
   private searchSub?: Subscription;
 
   strategies: any[] = [];
@@ -50,6 +56,8 @@ export class BacktestComponent implements OnInit, OnDestroy {
 
   // Results
   running = false;
+  reconnecting = false;
+  isConnectionError = false;
   error = '';
   result: any = null;
 
@@ -70,24 +78,24 @@ export class BacktestComponent implements OnInit, OnDestroy {
 
   constructor(private api: ApiService, private route: ActivatedRoute) {
     const today = new Date();
-    const oneYearAgo = new Date();
-    oneYearAgo.setFullYear(today.getFullYear() - 1);
+    const threeMonthsAgo = new Date();
+    threeMonthsAgo.setMonth(today.getMonth() - 3);
     this.toDate = this.fmt(today);
-    this.fromDate = this.fmt(oneYearAgo);
+    this.fromDate = this.fmt(threeMonthsAgo);
   }
 
   ngOnInit(): void {
     this.api.listStrategies().subscribe({ next: (s) => this.strategies = s });
     const sn = this.route.snapshot.queryParamMap.get('strategy');
-    if (sn) this.strategyName = sn;
+    if (sn) { this.strategyName = sn; this.onStrategyChange(); }
 
     // Wire debounced symbol search
     this.searchSub = this.searchSubject.pipe(
       debounceTime(250),
-      distinctUntilChanged(),
-      switchMap(q => {
+      distinctUntilChanged((a, b) => a.q === b.q && a.type === b.type),
+      switchMap(({q, type}) => {
         this.symbolLoading = true;
-        return this.api.searchSymbols(q, this.instrumentType);
+        return this.api.searchSymbols(q, type);
       })
     ).subscribe({
       next: (results) => { this.symbolResults = results; this.symbolLoading = false; this.showDropdown = true; },
@@ -101,7 +109,7 @@ export class BacktestComponent implements OnInit, OnDestroy {
 
   onSymbolInput(): void {
     if (this.symbolQuery.length >= 1) {
-      this.searchSubject.next(this.symbolQuery);
+      this.searchSubject.next({q: this.symbolQuery, type: this.instrumentType});
     } else {
       this.symbolResults = [];
       this.showDropdown = false;
@@ -109,31 +117,60 @@ export class BacktestComponent implements OnInit, OnDestroy {
   }
 
   selectSymbol(item: any): void {
-    // For equity, use the clean name; for futures/options use raw trading symbol
-    this.symbol = item.raw_symbol ?? item.symbol;
-    this.symbolQuery = item.symbol;
+    // Always use the underlying name — for futures/options the backend resolves contracts
+    this.symbol = item.name || item.raw_symbol || item.symbol;
+    this.symbolQuery = this.symbol;
     this.showDropdown = false;
-    if (item.exchange) this.exchange = item.exchange;
+    // Auto-set exchange from search result (NFO for NIFTY, BFO for SENSEX, MCX for Gold, etc.)
+    if (this.instrumentType !== 'equity' && item.exchange) {
+      this.exchange = item.exchange;
+    }
   }
 
   hideDropdown(): void {
-    // Delay to allow click to register
-    setTimeout(() => { this.showDropdown = false; }, 200);
+    setTimeout(() => {
+      this.showDropdown = false;
+      // Sync symbol from whatever the user typed (uppercased)
+      if (this.symbolQuery.trim()) {
+        this.symbol = this.symbolQuery.trim().toUpperCase();
+      }
+    }, 200);
   }
 
   fmt(d: Date): string { return d.toISOString().split('T')[0]; }
 
+  onStrategyChange(): void {
+    if (!this.strategyName) {
+      this.defaultSlPct = this.defaultTslPct = this.defaultTargetPct = null;
+      this.slPct = this.tslPct = this.targetPct = 0;
+      return;
+    }
+    this.api.getStrategy(this.strategyName).subscribe({
+      next: (rec) => {
+        this.defaultSlPct     = rec.default_sl_pct     ?? null;
+        this.defaultTslPct    = rec.default_tsl_pct    ?? null;
+        this.defaultTargetPct = rec.default_target_pct ?? null;
+        // Always reset form to strategy defaults when strategy changes
+        this.slPct     = this.defaultSlPct     ?? 0;
+        this.tslPct    = this.defaultTslPct    ?? 0;
+        this.targetPct = this.defaultTargetPct ?? 0;
+      },
+      error: () => { /* ignore */ }
+    });
+  }
+
   onInstrumentTypeChange(): void {
     if (this.instrumentType === 'equity') {
       this.exchange = 'NSE';
-    } else {
+    } else if (!['NFO', 'BFO', 'MCX'].includes(this.exchange)) {
+      // Only reset to NFO if we're not already on a valid derivative exchange
       this.exchange = 'NFO';
     }
     // Re-search with new instrument type
     this.symbolResults = [];
     this.showDropdown = false;
     if (this.symbolQuery.length >= 1) {
-      this.searchSubject.next(this.symbolQuery);
+      this.searchSubject.next({q: this.symbolQuery, type: this.instrumentType});
     }
   }
 
@@ -142,6 +179,10 @@ export class BacktestComponent implements OnInit, OnDestroy {
     this.error = '';
     this.result = null;
     this.running = true;
+    // Form value > 0: user override. Form value = 0: fall back to strategy default. 0 = disabled.
+    const effectiveSl     = this.slPct     > 0 ? this.slPct     : (this.defaultSlPct     ?? 0);
+    const effectiveTsl    = this.tslPct    > 0 ? this.tslPct    : (this.defaultTslPct    ?? 0);
+    const effectiveTarget = this.targetPct > 0 ? this.targetPct : (this.defaultTargetPct ?? 0);
     const payload = {
       strategy_name: this.strategyName,
       symbol: this.symbol.toUpperCase(),
@@ -151,18 +192,41 @@ export class BacktestComponent implements OnInit, OnDestroy {
       from_date: this.fromDate,
       to_date: this.toDate,
       capital: this.capital,
-      sl_pct: this.slPct,
-      tsl_pct: this.tslPct
+      sl_pct:     effectiveSl,
+      tsl_pct:    effectiveTsl,
+      target_pct: effectiveTarget
     };
     this.api.runBacktest(payload).subscribe({
       next: (res) => {
         this.result = res;
+        this.isConnectionError = false;
         this.buildChart(res.equity_curve);
         this.running = false;
       },
       error: (e) => {
         this.error = e?.error?.detail || 'Backtest failed.';
+        this.isConnectionError = e?.status === 503;
         this.running = false;
+      }
+    });
+  }
+
+  reconnect(): void {
+    this.reconnecting = true;
+    this.error = '';
+    this.api.reconnect().subscribe({
+      next: (res) => {
+        this.reconnecting = false;
+        if (res?.status === 'ok') {
+          this.error = '';
+          this.isConnectionError = false;
+        } else {
+          this.error = 'Reconnect failed: ' + (res?.detail ?? 'unknown error');
+        }
+      },
+      error: () => {
+        this.reconnecting = false;
+        this.error = 'Reconnect request failed — is the backend running?';
       }
     });
   }

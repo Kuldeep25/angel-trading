@@ -11,8 +11,9 @@ class BacktestRequest(BaseModel):
     from_date: str = Field(..., description="YYYY-MM-DD HH:MM")
     to_date: str   = Field(..., description="YYYY-MM-DD HH:MM")
     capital: float = 100_000.0
-    sl_pct: float  = 2.0
-    tsl_pct: float = 0.0
+    sl_pct: float     = 2.0
+    tsl_pct: float    = 0.0
+    target_pct: float = 0.0
     position_size_pct: float = 95.0
 
 

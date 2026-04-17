@@ -60,3 +60,36 @@ def load_strategy(file_path: str) -> StrategyProtocol:
 
     logger.info("Strategy loaded from %s", path)
     return cls()
+
+
+def get_strategy_defaults(file_path: str) -> dict:
+    """
+    Inspect a strategy file and return any sl_pct / tsl_pct declared as class
+    attributes on the Strategy class.  Returns an empty dict for attributes not
+    present.
+    """
+    try:
+        path = Path(file_path).resolve()
+        if not path.exists():
+            return {}
+
+        spec = importlib.util.spec_from_file_location(path.stem, path)
+        if spec is None or spec.loader is None:
+            return {}
+
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)  # type: ignore[arg-type]
+
+        cls = getattr(module, "Strategy", None)
+        if cls is None:
+            return {}
+
+        defaults: dict = {}
+        for attr in ("sl_pct", "tsl_pct", "target_pct"):
+            val = getattr(cls, attr, None)
+            if val is not None and isinstance(val, (int, float)):
+                defaults[attr] = float(val)
+        return defaults
+    except Exception as exc:
+        logger.warning("Could not read strategy defaults from %s: %s", file_path, exc)
+        return {}

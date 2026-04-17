@@ -6,10 +6,18 @@
     <div class="row g-3">
       <div class="col-12 col-md-4">
         <label class="form-label small">Strategy *</label>
-        <select class="form-select" [(ngModel)]="strategyName">
+        <select class="form-select" [(ngModel)]="strategyName" (ngModelChange)="onStrategyChange()">
           <option value="">Select strategy…</option>
           @for (s of strategies; track s.name) {
             <option [value]="s.name">{{ s.name }}</option>
+          }
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label small">Instrument Type</label>
+        <select class="form-select" [(ngModel)]="instrumentType" (ngModelChange)="onInstrumentTypeChange()">
+          @for (t of instrumentTypes; track t.value) {
+            <option [value]="t.value">{{ t.label }}</option>
           }
         </select>
       </div>
@@ -31,11 +39,8 @@
             @for (item of symbolResults; track item.raw_symbol) {
               <div class="symbol-item" (mousedown)="selectSymbol(item)">
                 <span class="symbol-name">{{ item.symbol }}</span>
-                @if (item.expiry) {
-                  <span class="symbol-meta text-secondary ms-2">{{ item.expiry }}</span>
-                }
                 @if (item.lot_size > 1) {
-                  <span class="symbol-meta text-accent ms-2">Lot: {{ item.lot_size }}</span>
+                  <span class="symbol-meta text-accent ms-auto">Lot: {{ item.lot_size }}</span>
                 }
               </div>
             }
@@ -43,18 +48,9 @@
         }
       </div>
       <div class="col-6 col-md-2">
-        <label class="form-label small">Instrument Type</label>
-        <select class="form-select" [(ngModel)]="instrumentType" (ngModelChange)="onInstrumentTypeChange()">
-          @for (t of instrumentTypes; track t.value) {
-            <option [value]="t.value">{{ t.label }}</option>
-          }
-        </select>
-      </div>
-      <div class="col-6 col-md-2">
-        <label class="form-label small">Exchange</label>
-        <select class="form-select" [(ngModel)]="exchange">
-          @for (e of exchanges; track e) { <option>{{ e }}</option> }
-        </select>
+        <label class="form-label small">Exchange <span class="text-secondary" style="font-size:0.75em">(auto)</span></label>
+        <input class="form-control" [value]="exchange" readonly tabindex="-1"
+               style="background:transparent;cursor:default;color:#8b949e;border-color:#30363d;">
       </div>
       <div class="col-6 col-md-2">
         <label class="form-label small">Interval</label>
@@ -75,12 +71,31 @@
         <input class="form-control" type="date" [(ngModel)]="toDate">
       </div>
       <div class="col-4 col-md-2">
-        <label class="form-label small">SL %</label>
-        <input class="form-control" type="number" step="0.5" [(ngModel)]="slPct">
+        <label class="form-label small">SL %
+          @if (defaultSlPct !== null) {
+            <span class="text-secondary ms-1" style="font-size:0.75em">(strategy: {{ defaultSlPct }})</span>
+          }
+        </label>
+        <input class="form-control" type="number" step="0.5" min="0" [(ngModel)]="slPct"
+               placeholder="{{ defaultSlPct !== null ? defaultSlPct : '0 = off' }}">
       </div>
       <div class="col-4 col-md-2">
-        <label class="form-label small">Trailing SL %</label>
-        <input class="form-control" type="number" step="0.5" [(ngModel)]="tslPct">
+        <label class="form-label small">Trailing SL %
+          @if (defaultTslPct !== null) {
+            <span class="text-secondary ms-1" style="font-size:0.75em">(strategy: {{ defaultTslPct }})</span>
+          }
+        </label>
+        <input class="form-control" type="number" step="0.5" min="0" [(ngModel)]="tslPct"
+               placeholder="{{ defaultTslPct !== null ? defaultTslPct : '0 = off' }}">
+      </div>
+      <div class="col-4 col-md-2">
+        <label class="form-label small">Target %
+          @if (defaultTargetPct !== null) {
+            <span class="text-secondary ms-1" style="font-size:0.75em">(strategy: {{ defaultTargetPct }})</span>
+          }
+        </label>
+        <input class="form-control" type="number" step="0.5" min="0" [(ngModel)]="targetPct"
+               placeholder="{{ defaultTargetPct !== null ? defaultTargetPct : '0 = off' }}">
       </div>
       <div class="col-4 col-md-2 d-flex align-items-end">
         <button class="btn btn-accent w-100" (click)="run()" [disabled]="running">
@@ -91,7 +106,14 @@
       </div>
     </div>
     @if (error) {
-      <div class="alert alert-danger mt-3 mb-0 py-2">{{ error }}</div>
+      <div class="alert alert-danger mt-3 mb-0 py-2 d-flex align-items-center gap-3">
+        <span class="flex-grow-1">{{ error }}</span>
+        @if (isConnectionError) {
+          <button class="btn btn-warning btn-sm flex-shrink-0" (click)="reconnect()" [disabled]="reconnecting">
+            {{ reconnecting ? 'Reconnecting…' : '⟳ Reconnect Angel One' }}
+          </button>
+        }
+      </div>
     }
   </div>
 </div>
@@ -163,11 +185,11 @@
             <tr>
               <th>#</th><th>Entry Time</th><th>Exit Time</th>
               <th>Side</th>
-              @if (result.trades[0]?.atm_strike > 0) {
+              @if (result.trades[0]?.atm_strike > 0 && result.config?.instrument_type !== 'equity') {
                 <th>Strike</th><th>Type</th>
               }
               <th>Entry ₹</th><th>Exit ₹</th>
-              <th>Qty <span class="text-secondary fw-normal small">(lots)</span></th><th>PnL ₹</th><th>Exit Reason</th>
+              <th>Qty <span class="text-secondary fw-normal small">{{ result.config?.instrument_type === 'equity' ? '(shares)' : '(lots)' }}</span></th><th>PnL ₹</th><th>Exit Reason</th>
             </tr>
           </thead>
           <tbody>
@@ -179,7 +201,7 @@
                 <td>
                   <span class="badge bg-primary">{{ t.side }}</span>
                 </td>
-                @if (result.trades[0]?.atm_strike > 0) {
+                @if (result.trades[0]?.atm_strike > 0 && result.config?.instrument_type !== 'equity') {
                   <td class="fw-semibold text-info">{{ t.atm_strike | number:'1.0-0' }}</td>
                   <td>
                     <span class="badge" [class.bg-success]="t.option_type==='CE'" [class.bg-danger]="t.option_type==='PE'" [class.bg-warning]="t.option_type==='STRADDLE'">{{ t.option_type }}</span>
@@ -197,7 +219,12 @@
                   {{ t.pnl >= 0 ? '+' : '' }}₹{{ t.pnl | number:'1.0-0' }}
                 </td>
                 <td>
-                  <span class="badge" [class.bg-danger]="t.exit_reason==='SL'" [class.bg-warning]="t.exit_reason==='TSL'" [class.bg-success]="t.exit_reason==='SIGNAL'" [class.bg-secondary]="t.exit_reason==='EOD'">{{ t.exit_reason }}</span>
+                  <span class="badge"
+                    [class.bg-success]="t.exit_reason==='TARGET'"
+                    [class.bg-danger]="t.exit_reason==='SL'"
+                    [class.bg-warning]="t.exit_reason==='TSL'"
+                    [class.bg-primary]="t.exit_reason==='SIGNAL'"
+                    [class.bg-secondary]="t.exit_reason==='EOD'">{{ t.exit_reason }}</span>
                 </td>
               </tr>
             }

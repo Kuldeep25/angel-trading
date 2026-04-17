@@ -65,25 +65,39 @@ def get_token(symbol: str, exchange: str) -> Optional[str]:
     return None
 
 
-def get_nearest_futures_token(underlying: str) -> Optional[tuple]:
+# Exchanges that host derivative contracts (futures/options)
+_DERIV_EXCHANGES = frozenset({"NFO", "BFO", "MCX"})
+# Instrument types that are futures across all exchanges
+_FUT_TYPES = frozenset({"FUTIDX", "FUTSTK", "FUTCOM", "FUTCUR"})
+# All derivative instrument types
+_DERIV_TYPES = frozenset({"FUTIDX", "FUTSTK", "FUTCOM", "FUTCUR",
+                           "OPTIDX", "OPTSTK", "OPTFUT", "OPTCUR"})
+
+
+def get_nearest_futures_token(underlying: str, preferred_exchange: str = "") -> Optional[tuple]:
     """
     Return (token, symbol, exchange) for the nearest non-expired futures contract
-    for the given underlying (e.g. 'NIFTY', 'BANKNIFTY', 'RELIANCE').
-    Prefers FUTIDX for indices, FUTSTK for stocks.
+    for the given underlying (e.g. 'NIFTY', 'BANKNIFTY', 'SENSEX', 'GOLD').
+    Scans NFO, BFO, and MCX. Use preferred_exchange to restrict to one exchange.
     Returns None if no active contract found.
     """
     ensure_loaded()
     from datetime import date as _date
     today = _date.today()
     underlying_upper = underlying.upper()
+    pref = preferred_exchange.upper() if preferred_exchange else ""
 
     best = None
     best_expiry = None
+    best_exch = "NFO"
     for rec in _by_symbol_exchange.values():
-        if rec.get("exch_seg", "").upper() != "NFO":
+        exch = rec.get("exch_seg", "").upper()
+        if exch not in _DERIV_EXCHANGES:
+            continue
+        if pref and exch != pref:
             continue
         itype = rec.get("instrumenttype", "").upper()
-        if itype not in ("FUTIDX", "FUTSTK"):
+        if itype not in _FUT_TYPES:
             continue
         if rec.get("name", "").upper() != underlying_upper:
             continue
@@ -97,26 +111,32 @@ def get_nearest_futures_token(underlying: str) -> Optional[tuple]:
         if best_expiry is None or exp < best_expiry:
             best_expiry = exp
             best = rec
+            best_exch = exch
 
     if best:
-        return best["token"], best["symbol"], "NFO"
+        return best["token"], best["symbol"], best_exch
     return None
 
 
-def get_all_futures_tokens(underlying: str) -> list:
+def get_all_futures_tokens(underlying: str, preferred_exchange: str = "") -> list:
     """
     Return ALL futures contracts for the underlying sorted by expiry (ascending).
     Each entry is (token, symbol, exchange, expiry_date).
+    Scans NFO, BFO, and MCX. Use preferred_exchange to restrict to one exchange.
     Includes both expired and active contracts.
     """
     ensure_loaded()
     underlying_upper = underlying.upper()
+    pref = preferred_exchange.upper() if preferred_exchange else ""
     contracts = []
     for rec in _by_symbol_exchange.values():
-        if rec.get("exch_seg", "").upper() != "NFO":
+        exch = rec.get("exch_seg", "").upper()
+        if exch not in _DERIV_EXCHANGES:
+            continue
+        if pref and exch != pref:
             continue
         itype = rec.get("instrumenttype", "").upper()
-        if itype not in ("FUTIDX", "FUTSTK"):
+        if itype not in _FUT_TYPES:
             continue
         if rec.get("name", "").upper() != underlying_upper:
             continue
@@ -125,7 +145,7 @@ def get_all_futures_tokens(underlying: str) -> list:
             exp = datetime.strptime(expiry_str, "%d%b%Y").date()
         except ValueError:
             continue
-        contracts.append((rec["token"], rec["symbol"], "NFO", exp))
+        contracts.append((rec["token"], rec["symbol"], exch, exp))
     contracts.sort(key=lambda x: x[3])
     return contracts
 
@@ -185,12 +205,12 @@ def get_lot_size(symbol: str, exchange: str = "NFO") -> int:
 
     best_lot = 1
     for rec2 in _by_symbol_exchange.values():
-        if rec2.get("exch_seg", "").upper() != "NFO":
+        if rec2.get("exch_seg", "").upper() not in _DERIV_EXCHANGES:
             continue
         if rec2.get("name", "").upper() != underlying:
             continue
         itype = rec2.get("instrumenttype", "").upper()
-        if itype not in ("FUTIDX", "FUTSTK", "OPTIDX", "OPTSTK"):
+        if itype not in _DERIV_TYPES:
             continue
         try:
             ls = int(rec2.get("lotsize", 1))
@@ -260,80 +280,110 @@ def search_instruments(query: str, instrument_type: str = "equity", limit: int =
     """
     Search instruments by query string, filtered by instrument_type.
 
-    instrument_type: 'equity' | 'futures' | 'options'
+    For futures/options: returns unique underlying names (e.g. NIFTY, BANKNIFTY,
+    RELIANCE) with lot size — NOT individual contracts. The backtest engine
+    resolves the actual contracts internally.
+
+    For equity: returns matching NSE/BSE stocks.
 
     Returns list of dicts with keys:
-      symbol, raw_symbol, name, exchange, lot_size, expiry?, option_type?
+      symbol, raw_symbol, name, exchange, lot_size
     """
     ensure_loaded()
-    from datetime import date as _date
-    today = _date.today()
     itype = instrument_type.lower()
     q_upper = query.strip().upper()
 
-    results: List[Dict] = []
+    if itype in ("futures", "options"):
+        # Collect unique underlying names from active NFO/BFO/MCX futures.
+        # Returns the canonical derivative exchange for each underlying so the
+        # frontend can auto-set the exchange field (NFO for NIFTY, BFO for SENSEX,
+        # MCX for GOLD/CRUDEOIL, etc.).
+        from datetime import date as _date
+        today = _date.today()
+        # name -> (best lot_size, canonical derivative exchange)
+        seen_names: dict = {}
 
+        for rec in _by_symbol_exchange.values():
+            exch = rec.get("exch_seg", "").upper()
+            if exch not in _DERIV_EXCHANGES:
+                continue
+            inst = rec.get("instrumenttype", "").upper()
+            if inst not in _FUT_TYPES:
+                continue
+            expiry_str = rec.get("expiry", "")
+            try:
+                exp = datetime.strptime(expiry_str, "%d%b%Y").date()
+                if exp < today:
+                    continue
+            except ValueError:
+                continue
+
+            name: str = rec.get("name", "").upper()
+            if not name:
+                continue
+            if q_upper and q_upper not in name:
+                continue
+
+            lot = int(rec.get("lotsize", 1) or 1)
+            if name not in seen_names or lot > seen_names[name][0]:
+                seen_names[name] = (lot, exch)
+
+        def sort_key_deriv(item: tuple) -> tuple:
+            return (0 if item[0].startswith(q_upper) else 1, item[0])
+
+        sorted_names = sorted(seen_names.items(), key=sort_key_deriv)[:limit]
+        return [
+            {
+                "symbol": name,
+                "raw_symbol": name,
+                "name": name,
+                "exchange": lot_exch[1],   # NFO | BFO | MCX
+                "lot_size": lot_exch[0],
+            }
+            for name, lot_exch in sorted_names
+        ]
+
+    # ── Equity ────────────────────────────────────────────────────────────
+    # NSE equities: instrumenttype="" with symbol ending in "-EQ"
+    # BSE equities: instrumenttype in ("EQ","BE","A","B","SM","ST","GS","")
+    # Indices: instrumenttype="AMXIDX" → exclude these
+    _EXCLUDE_INST = frozenset({"AMXIDX", "FUTIDX", "FUTSTK", "FUTCOM", "FUTCUR",
+                                "OPTIDX", "OPTSTK", "OPTFUT", "OPTCUR"})
+
+    seen_equity: dict = {}   # name_upper -> dict (NSE preferred over BSE)
     for rec in _by_symbol_exchange.values():
         exch = rec.get("exch_seg", "").upper()
         inst = rec.get("instrumenttype", "").upper()
         sym: str = rec.get("symbol", "")
         name: str = rec.get("name", "")
 
-        if itype == "equity":
-            if exch not in ("NSE", "BSE"):
-                continue
-            if inst not in ("", "EQ", "BE", "SM", "ST", "GS"):
-                continue
-        elif itype == "futures":
-            if exch != "NFO":
-                continue
-            if inst not in ("FUTIDX", "FUTSTK"):
-                continue
-            expiry_str = rec.get("expiry", "")
-            try:
-                exp = datetime.strptime(expiry_str, "%d%b%Y").date()
-                if exp < today:
-                    continue
-            except ValueError:
-                continue
-        elif itype == "options":
-            if exch != "NFO":
-                continue
-            if inst not in ("OPTIDX", "OPTSTK"):
-                continue
-            expiry_str = rec.get("expiry", "")
-            try:
-                exp = datetime.strptime(expiry_str, "%d%b%Y").date()
-                if exp < today:
-                    continue
-            except ValueError:
-                continue
-        else:
+        if exch not in ("NSE", "BSE"):
             continue
-
+        if inst in _EXCLUDE_INST:
+            continue
+        # NSE equity symbols always end with "-EQ"; skip anything else on NSE
+        if exch == "NSE" and not sym.upper().endswith("-EQ"):
+            continue
         if q_upper and q_upper not in sym.upper() and q_upper not in name.upper():
             continue
 
-        item: Dict = {
-            "symbol": name if itype == "equity" else sym,
-            "raw_symbol": sym,
-            "name": name,
-            "exchange": exch,
-            "lot_size": int(rec.get("lotsize", 1) or 1),
-        }
-        if itype in ("futures", "options"):
-            item["expiry"] = rec.get("expiry", "")
-            item["option_type"] = rec.get("optiontype", "")
-
-        results.append(item)
-        if len(results) >= limit * 3:  # fetch extra for sorting
-            break
+        key = name.upper()
+        existing = seen_equity.get(key)
+        # Prefer NSE over BSE; don't overwrite NSE entry with BSE
+        if existing is None or (existing["exchange"] == "BSE" and exch == "NSE"):
+            seen_equity[key] = {
+                "symbol": name,
+                "raw_symbol": sym,
+                "name": name,
+                "exchange": exch,
+                "lot_size": 1,
+            }
 
     def sort_key(r: Dict) -> tuple:
-        s = r["symbol"].upper()
+        s = r["name"].upper()
         return (0 if s.startswith(q_upper) else 1, s)
 
-    results.sort(key=sort_key)
+    results = sorted(seen_equity.values(), key=sort_key)
     return results[:limit]
 
 

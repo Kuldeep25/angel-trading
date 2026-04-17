@@ -13,6 +13,10 @@ export class ApiService {
     return this.http.get(`${BASE}/ping`);
   }
 
+  reconnect(): Observable<any> {
+    return this.http.post(`${BASE}/reconnect`, {});
+  }
+
   // ── Strategies ──────────────────────────────────────────────────────────
   listStrategies(): Observable<any[]> {
     return this.http.get<any[]>(`${BASE}/strategies/list`);

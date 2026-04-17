@@ -127,6 +127,23 @@ app.include_router(voice.router,      tags=["Voice"])
 app.include_router(symbols.router,    tags=["Symbols"])
 
 
+@app.post("/reconnect", tags=["Health"])
+async def reconnect():
+    """Re-attempt Angel One login without restarting uvicorn."""
+    if not (settings.angel_api_key and settings.angel_client_code):
+        return {"status": "error", "detail": "Angel One credentials not configured in .env"}
+    try:
+        angel_client.connect(
+            api_key     = settings.angel_api_key,
+            client_code = settings.angel_client_code,
+            password    = settings.angel_password,
+            totp_secret = settings.angel_totp_secret,
+        )
+        return {"status": "ok", "detail": "Angel One reconnected successfully"}
+    except Exception as exc:
+        return {"status": "error", "detail": str(exc)}
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 #  First-run strategy registration
 # ─────────────────────────────────────────────────────────────────────────────
