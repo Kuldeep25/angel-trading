@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 
-const BASE = 'http://localhost:8000';
+const BASE = `http://${window.location.hostname}:8000`;
 
 @Injectable({ providedIn: 'root' })
 export class ApiService {
