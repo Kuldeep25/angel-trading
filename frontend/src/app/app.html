@@ -38,12 +38,25 @@
         {{ serverOnline ? 'Server Online' : 'Server Offline' }}
       </span>
 
-      <!-- Angel Connected badge (only shown when server is up) -->
+      <!-- Angel Connected badge + Start/Stop session -->
       @if (serverOnline) {
         <span class="angel-badge" [class.disconnected]="!angelConnected">
           <i class="bi" [class.bi-wifi]="angelConnected" [class.bi-wifi-off]="!angelConnected"></i>
           {{ angelConnected ? 'Angel Connected' : 'Not Connected' }}
         </span>
+        @if (angelConnected) {
+          <button class="btn btn-sm btn-outline-danger ms-2" (click)="stopSession()" [disabled]="sessionBusy"
+                  title="Disconnect Angel One — close trading for the day">
+            <i class="bi" [class.bi-stop-fill]="!sessionBusy" [class.bi-hourglass-split]="sessionBusy"></i>
+            {{ sessionBusy ? '…' : 'Stop' }}
+          </button>
+        } @else {
+          <button class="btn btn-sm btn-outline-success ms-2" (click)="startSession()" [disabled]="sessionBusy"
+                  title="Connect Angel One — start trading session">
+            <i class="bi" [class.bi-play-fill]="!sessionBusy" [class.bi-hourglass-split]="sessionBusy"></i>
+            {{ sessionBusy ? '…' : 'Start' }}
+          </button>
+        }
       }
     </div>
 

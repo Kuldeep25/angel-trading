@@ -14,6 +14,7 @@ export class App implements OnInit, OnDestroy {
   angelConnected = false;
   serverOnline = false;
   showServerCmd = false;
+  sessionBusy = false;   // true while start/stop is in flight
   readonly startCmd = 'cd backend  &&  .venv\\Scripts\\uvicorn main:app --reload --port 8000';
 
   private pingTimer: any;
@@ -51,6 +52,22 @@ export class App implements OnInit, OnDestroy {
   }
 
   toggleServerCmd(): void { this.showServerCmd = !this.showServerCmd; }
+
+  startSession(): void {
+    this.sessionBusy = true;
+    this.api.reconnect().subscribe({
+      next: () => { this.doPing(); this.sessionBusy = false; },
+      error: () => { this.sessionBusy = false; },
+    });
+  }
+
+  stopSession(): void {
+    this.sessionBusy = true;
+    this.api.disconnect().subscribe({
+      next: () => { this.doPing(); this.sessionBusy = false; },
+      error: () => { this.sessionBusy = false; },
+    });
+  }
 
   toggleSidebar(): void { this.sidebarOpen = !this.sidebarOpen; }
   closeSidebar(): void  { this.sidebarOpen = false; }

@@ -17,6 +17,10 @@ export class ApiService {
     return this.http.post(`${BASE}/reconnect`, {});
   }
 
+  disconnect(): Observable<any> {
+    return this.http.post(`${BASE}/disconnect`, {});
+  }
+
   // ── Strategies ──────────────────────────────────────────────────────────
   listStrategies(): Observable<any[]> {
     return this.http.get<any[]>(`${BASE}/strategies/list`);

@@ -144,6 +144,18 @@ async def reconnect():
         return {"status": "error", "detail": str(exc)}
 
 
+@app.post("/disconnect", tags=["Health"])
+async def disconnect():
+    """Disconnect Angel One session (close trading for the day)."""
+    if not angel_client.is_connected:
+        return {"status": "ok", "detail": "Already disconnected"}
+    try:
+        angel_client.disconnect()
+        return {"status": "ok", "detail": "Angel One session closed"}
+    except Exception as exc:
+        return {"status": "error", "detail": str(exc)}
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 #  First-run strategy registration
 # ─────────────────────────────────────────────────────────────────────────────
