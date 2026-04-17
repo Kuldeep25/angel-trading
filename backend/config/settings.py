@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     # App
     default_capital: float = 100000.0
     app_port: int = 8000
+    # Comma-separated extra CORS origins (e.g. Tailscale / LAN IPs)
+    extra_cors_origins: str = ""
 
     # Derived paths (set at runtime)
     strategies_dir: str = "strategy/strategies"
