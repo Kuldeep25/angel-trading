@@ -10,7 +10,7 @@ def voice_execute(req: VoiceExecuteRequest):
     """Execute a voice command from pre-transcribed text (e.g., browser Web Speech API)."""
     if not req.text or not req.text.strip():
         raise HTTPException(status_code=400, detail="Command text is required.")
-    return execute_text_command(req.text.strip().lower())
+    return execute_text_command(req.text.strip().lower(), mode=req.mode)
 
 
 @router.post("/voice/listen")

@@ -17,6 +17,7 @@ export class VoiceComponent implements OnInit, OnDestroy {
   error = '';
   manualText = '';
   speechSupported = false;
+  orderMode: 'paper' | 'live' = 'paper';
   commandHistory: { text: string; result: string; time: string }[] = [];
 
   private recognition: any;
@@ -100,7 +101,7 @@ export class VoiceComponent implements OnInit, OnDestroy {
   }
 
   execute(text: string): void {
-    this.api.executeVoiceCommand(text).subscribe({
+    this.api.executeVoiceCommand(text, this.orderMode).subscribe({
       next: (r: any) => {
         this.result = r.message || r.result || JSON.stringify(r);
         this.commandHistory.unshift({ text, result: this.result, time: new Date().toLocaleTimeString() });

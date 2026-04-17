@@ -100,29 +100,29 @@ def parse_command(text: str) -> Tuple[Optional[str], Dict[str, Any]]:
     return None, {}
 
 
-def execute_text_command(text: str) -> Dict[str, Any]:
+def execute_text_command(text: str, mode: str = "paper") -> Dict[str, Any]:
     """
     Parse and dispatch a text command to the appropriate trading action.
+    mode: "paper" → paper/simulator  |  "live" → real Angel One order
     Returns a result dict.
     """
+    paper = (mode != "live")
     action, params = parse_command(text)
 
     if action is None:
         return {"status": "error", "message": f"Unknown command: '{text}'"}
 
-    logger.info("Voice action: %s  params: %s", action, params)
+    logger.info("Voice action: %s  params: %s  mode: %s", action, params, mode)
 
     # Lazy import to avoid circular deps
     from execution.engine import place_order
     from execution.position_tracker import get_all_positions
-    from angel.symbols import get_token
+    from angel.symbols import get_token, get_lot_size
     from options.engine import get_spot_price, get_atm_strike, get_straddle_contracts
 
     try:
         if action == "exit_all":
             from execution.paper_trading import paper_engine
-            from angel.client import angel_client
-            # Exit paper positions
             paper_positions = paper_engine.get_positions()
             for pos in paper_positions:
                 sym = pos["symbol"]
@@ -144,32 +144,79 @@ def execute_text_command(text: str) -> Dict[str, Any]:
             }
 
         elif action in ("buy_call", "buy_put", "sell_call", "sell_put"):
-            symbol = params.get("symbol", "NIFTY")
+            symbol = params.get("symbol", "NIFTY").upper()
             option_type = "CE" if "call" in action else "PE"
             side = "BUY" if action.startswith("buy") else "SELL"
             spot = get_spot_price(symbol, "NSE") or 0.0
             strike = get_atm_strike(spot, symbol)
+            lot_size = get_lot_size(symbol, "NFO") or 1
+
+            # Build NFO option symbol e.g. NIFTY28APR26CE24500
+            from datetime import date
+            exp_str = date.today().strftime("%d%b%y").upper()  # rough — nearest weekly
+            nfo_symbol = f"{symbol}{exp_str}{option_type}{int(strike)}"
+            token = get_token(nfo_symbol, "NFO")
+
+            if token is None:
+                return {
+                    "status": "error",
+                    "message": f"Could not resolve NFO token for {nfo_symbol}. Use backtest or live-trading page for options.",
+                }
+
+            resp = place_order(
+                symbol=nfo_symbol,
+                token=token,
+                exchange="NFO",
+                transaction_type=side,
+                quantity=lot_size,
+                paper=paper,
+                ltp=spot * 0.015,   # rough ATM premium estimate for paper fill
+            )
+            mode_label = "Simulator" if paper else "LIVE"
             return {
                 "status": "ok",
                 "action": action,
-                "message": f"Voice command received: {side} {symbol} {option_type} strike={strike}. Route to execution.",
-                "symbol": symbol,
-                "option_type": option_type,
-                "side": side,
+                "mode": mode_label,
+                "message": f"[{mode_label}] {side} {nfo_symbol} × {lot_size} — order placed.",
+                "order": resp,
+                "symbol": nfo_symbol,
                 "strike": strike,
+                "option_type": option_type,
+                "lot_size": lot_size,
             }
 
         elif action in ("buy_equity", "sell_equity"):
-            symbol = params.get("symbol", "")
+            symbol = params.get("symbol", "").upper()
             side = "BUY" if action == "buy_equity" else "SELL"
-            return {"status": "ok", "action": action, "symbol": symbol, "side": side}
+            token = get_token(f"{symbol}-EQ", "NSE") or get_token(symbol, "NSE")
+            if not token:
+                return {"status": "error", "message": f"Symbol '{symbol}' not found on NSE."}
+            resp = place_order(
+                symbol=f"{symbol}-EQ",
+                token=token,
+                exchange="NSE",
+                transaction_type=side,
+                quantity=1,
+                paper=paper,
+                ltp=0.0,
+            )
+            mode_label = "Simulator" if paper else "LIVE"
+            return {
+                "status": "ok",
+                "action": action,
+                "mode": mode_label,
+                "message": f"[{mode_label}] {side} {symbol} × 1 — order placed.",
+                "order": resp,
+            }
 
         elif action == "set_stoploss":
             value = params.get("value", 0.0)
-            return {"status": "ok", "action": action, "stoploss": value}
+            return {"status": "ok", "action": action, "stoploss": value,
+                    "message": f"Stop loss set to {value}% (applies to next trade)."}
 
         elif action in ("start_trading", "stop_trading"):
-            return {"status": "ok", "action": action}
+            return {"status": "ok", "action": action,
+                    "message": f"{'Trading started' if action == 'start_trading' else 'Trading stopped'}."}
 
         else:
             return {"status": "error", "message": f"Unhandled action: {action}"}

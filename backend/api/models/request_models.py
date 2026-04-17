@@ -45,3 +45,4 @@ class LiveStartRequest(BaseModel):
 
 class VoiceExecuteRequest(BaseModel):
     text: str
+    mode: str = "paper"   # "paper" | "live"

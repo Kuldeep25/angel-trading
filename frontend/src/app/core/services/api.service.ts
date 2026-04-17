@@ -100,8 +100,8 @@ export class ApiService {
   }
 
   // ── Voice ────────────────────────────────────────────────────────────────
-  executeVoiceCommand(text: string): Observable<any> {
-    return this.http.post(`${BASE}/voice/execute`, { text });
+  executeVoiceCommand(text: string, mode: 'paper' | 'live' = 'paper'): Observable<any> {
+    return this.http.post(`${BASE}/voice/execute`, { text, mode });
   }
 
   voiceListen(): Observable<any> {
