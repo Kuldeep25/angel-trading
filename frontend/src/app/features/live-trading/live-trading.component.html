@@ -35,6 +35,49 @@
   </div>
 </div>
 
+<!-- Account balance -->
+@if (funds.connected) {
+  <div class="card mb-4">
+    <div class="card-body py-2">
+      <div class="row g-2 align-items-center">
+        <div class="col-12 col-md-auto mb-1">
+          <span class="text-secondary small"><i class="bi bi-bank2 me-1"></i>Account</span>
+        </div>
+        <div class="col-6 col-md">
+          <div class="metric-tile py-2">
+            <div class="metric-label">Net Balance</div>
+            <div class="metric-value">&#8377;{{ funds.net | number:'1.0-0' }}</div>
+          </div>
+        </div>
+        <div class="col-6 col-md">
+          <div class="metric-tile py-2">
+            <div class="metric-label">Available Cash</div>
+            <div class="metric-value text-success">&#8377;{{ funds.available_cash | number:'1.0-0' }}</div>
+          </div>
+        </div>
+        <div class="col-6 col-md">
+          <div class="metric-tile py-2">
+            <div class="metric-label">Used Margin</div>
+            <div class="metric-value pnl-negative">&#8377;{{ funds.used_margin | number:'1.0-0' }}</div>
+          </div>
+        </div>
+        <div class="col-6 col-md">
+          <div class="metric-tile py-2">
+            <div class="metric-label">Collateral</div>
+            <div class="metric-value">&#8377;{{ funds.collateral | number:'1.0-0' }}</div>
+          </div>
+        </div>
+        <div class="col-6 col-md">
+          <div class="metric-tile py-2">
+            <div class="metric-label">M2M (Unr.)</div>
+            <div class="metric-value" [ngClass]="pnlClass(funds.unrealised_mtom)">&#8377;{{ funds.unrealised_mtom | number:'1.0-0' }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+}
+
 <!-- PnL summary -->
 <div class="row g-3 mb-4">
   <div class="col-6 col-md-3">
@@ -88,7 +131,7 @@
         <thead>
           <tr>
             <th>Symbol</th><th>Qty</th><th>Avg ₹</th>
-            <th>LTP ₹</th><th>Unrealised</th><th>Realised</th><th></th>
+            <th>LTP ₹</th><th>Unrealised</th><th>Realised</th><th>Guard</th><th></th>
           </tr>
         </thead>
         <tbody>
@@ -96,13 +139,24 @@
             <tr>
               <td class="fw-semibold">
                 {{ p.symbol }}
+                @if (activeTab === 'live') {
+                  <div class="mt-1">
+                    @if (p.source === 'manual') {
+                      <span class="badge bg-info text-dark" style="font-size:0.62rem"><i class="bi bi-person-fill me-1"></i>Manual</span>
+                    } @else {
+                      <span class="badge bg-primary" style="font-size:0.62rem" [title]="p.strategy_key">
+                        <i class="bi bi-robot me-1"></i>Strategy
+                      </span>
+                    }
+                  </div>
+                }
                 @if (guards[p.symbol]) {
                   <div class="d-flex gap-1 mt-1 flex-wrap">
                     @if (guards[p.symbol].sl_price > 0) {
-                      <span class="badge bg-danger" style="font-size:0.65rem">SL ₹{{ guards[p.symbol].sl_price }}</span>
+                      <span class="badge bg-danger" style="font-size:0.65rem">SL &#8377;{{ guards[p.symbol].sl_price }}</span>
                     }
                     @if (guards[p.symbol].target_price > 0) {
-                      <span class="badge bg-success" style="font-size:0.65rem">◎ ₹{{ guards[p.symbol].target_price }}</span>
+                      <span class="badge bg-success" style="font-size:0.65rem">&#9678; &#8377;{{ guards[p.symbol].target_price }}</span>
                     }
                     @if (guards[p.symbol].tsl_pct > 0) {
                       <span class="badge bg-warning text-dark" style="font-size:0.65rem">TSL {{ guards[p.symbol].tsl_pct }}%</span>
@@ -118,21 +172,6 @@
               </td>
               <td [ngClass]="pnlClass(p.realised_pnl)">
                 ₹{{ p.realised_pnl | number:'1.0-0' }}
-              </td>
-              <td>
-                <button class="btn btn-sm me-1"
-                        title="Set Stop Loss / Target / Trailing SL"
-                        [class.btn-outline-warning]="!guards[p.symbol]"
-                        [class.btn-warning]="!!guards[p.symbol]"
-                        (click)="openGuard(p)">
-                  <i class="bi bi-shield-check"></i>
-                </button>
-                @if (guards[p.symbol]) {
-                  <button class="btn btn-sm btn-outline-secondary" title="Remove guard"
-                          (click)="removeGuard(p.symbol)">
-                    <i class="bi bi-shield-x"></i>
-                  </button>
-                }
               </td>
               <td>
                 <button class="btn btn-sm me-1"

@@ -121,13 +121,14 @@ app.add_middleware(
 )
 
 # ── Routers ───────────────────────────────────────────────────────────────────
-from api.routes import ping, backtest, strategies, live, positions, voice, symbols  # noqa: E402
+from api.routes import ping, backtest, strategies, live, positions, voice, symbols, account  # noqa: E402
 
 app.include_router(ping.router,       tags=["Health"])
 app.include_router(backtest.router,   tags=["Backtest"])
 app.include_router(strategies.router, tags=["Strategies"])
 app.include_router(live.router,       tags=["Live Trading"])
 app.include_router(positions.router,  tags=["Positions"])
+app.include_router(account.router,    tags=["Account"])
 app.include_router(voice.router,      tags=["Voice"])
 app.include_router(symbols.router,    tags=["Symbols"])
 

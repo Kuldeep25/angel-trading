@@ -9,6 +9,15 @@ from typing import Any, Dict, List
 from angel.client import angel_client
 from execution.paper_trading import paper_engine
 
+
+def _strategy_symbols() -> dict:
+    """Lazy import to avoid circular dependency."""
+    try:
+        from api.routes.live import get_strategy_symbols  # noqa: PLC0415
+        return get_strategy_symbols()
+    except Exception:
+        return {}
+
 logger = logging.getLogger(__name__)
 
 
@@ -25,12 +34,23 @@ def get_all_positions() -> Dict[str, Any]:
         "paper_pnl": float,
     }
     """
+    strategy_map    = _strategy_symbols()
     live_positions  = _fetch_live_positions()
     paper_positions = paper_engine.get_positions()
     paper_pnl       = paper_engine.total_pnl()
 
+    # Tag each live position
+    for p in live_positions:
+        sym = p.get("symbol", "")
+        if sym in strategy_map:
+            p["source"] = "strategy"
+            p["strategy_key"] = strategy_map[sym]
+        else:
+            p["source"] = "manual"
+            p["strategy_key"] = None
+
     live_pnl = sum(
-        float(p.get("unrealised", 0)) + float(p.get("realised", 0))
+        float(p.get("unrealised_pnl", 0)) + float(p.get("realised_pnl", 0))
         for p in live_positions
     )
 

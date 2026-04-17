@@ -28,6 +28,12 @@ router = APIRouter()
 
 # ── Running strategy registry ─────────────────────────────────────────────
 _running: Dict[str, Dict[str, Any]] = {}
+
+
+def get_strategy_symbols() -> Dict[str, str]:
+    """Return {symbol: strategy_key} for all currently running strategies."""
+    with _running_lock:
+        return {v["symbol"]: v["key"] for v in _running.values()}
 _running_lock = threading.Lock()
 
 

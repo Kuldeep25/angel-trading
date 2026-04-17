@@ -98,6 +98,11 @@ export class ApiService {
     return this.http.post(`${BASE}/positions/exit-all?paper=${paper}`, {});
   }
 
+  // ── Account / Funds ──────────────────────────────────────────────────────
+  getAccountFunds(): Observable<any> {
+    return this.http.get(`${BASE}/account/funds`);
+  }
+
   // ── Position Guards ──────────────────────────────────────────────────────
   getPositionGuards(): Observable<any> {
     return this.http.get(`${BASE}/positions/guards`);

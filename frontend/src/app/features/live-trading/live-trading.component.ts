@@ -12,6 +12,7 @@ export class LiveTradingComponent implements OnInit, OnDestroy {
   positions: any = { live: [], paper: [], live_pnl: 0, paper_pnl: 0 };
   tradingStatus: any = { running: false, active_strategies: [] };
   activeTab: 'live' | 'paper' = 'paper';
+  funds: any = { connected: false, net: 0, available_cash: 0, used_margin: 0, collateral: 0, unrealised_mtom: 0 };
 
   // Start modal
   showModal = false;
@@ -52,6 +53,7 @@ export class LiveTradingComponent implements OnInit, OnDestroy {
     this.api.listStrategies().subscribe({ next: (s) => this.strategies = s });
     this.api.tradingStatus().subscribe({ next: (s) => this.tradingStatus = s });
     this.api.getPositionGuards().subscribe({ next: (g) => this.guards = g || {} });
+    this.api.getAccountFunds().subscribe({ next: (f) => this.funds = f });
   }
 
   loadPositions(): void {
@@ -60,6 +62,7 @@ export class LiveTradingComponent implements OnInit, OnDestroy {
       error: () => {}
     });
     this.api.tradingStatus().subscribe({ next: (s) => this.tradingStatus = s });
+    this.api.getAccountFunds().subscribe({ next: (f) => this.funds = f });
   }
 
   startTrading(): void {
