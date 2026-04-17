@@ -2,12 +2,12 @@
   <!-- Sidebar overlay (mobile) -->
   <div class="sidebar-overlay" [class.visible]="sidebarOpen" (click)="closeSidebar()"></div>
 
-  <!-- Sidebar -->
+  <!-- Sidebar (desktop always visible, mobile = overlay) -->
   <nav class="sidebar" [class.open]="sidebarOpen">
     <div class="sidebar-brand">
       <i class="bi bi-graph-up-arrow"></i> AI Trader
     </div>
-    <ul class="nav flex-column mt-2">
+    <ul class="nav flex-column mt-2 flex-grow-1">
       @for (item of navItems; track item.path) {
         <li class="nav-item">
           <a class="nav-link" [routerLink]="item.path" routerLinkActive="active" (click)="closeSidebar()">
@@ -17,7 +17,7 @@
         </li>
       }
     </ul>
-    <div class="mt-auto p-3 small text-secondary border-top" style="border-color: var(--bs-border-color) !important;">
+    <div class="sidebar-footer">
       Angel One SmartAPI<br>
       <span class="text-warning">Personal Use Only</span>
     </div>
@@ -27,34 +27,36 @@
   <div class="main-content">
     <!-- Top bar -->
     <div class="topbar">
-      <button class="btn btn-sm btn-outline-secondary d-md-none" (click)="toggleSidebar()">
-        <i class="bi bi-list fs-5"></i>
+      <button class="btn btn-sm btn-outline-secondary d-md-none border-0 px-2" (click)="toggleSidebar()">
+        <i class="bi bi-list fs-4"></i>
       </button>
-      <span class="topbar-title">AI Trading Agent</span>
+      <span class="topbar-title d-none d-sm-block">AI Trading Agent</span>
 
       <!-- Server status badge -->
       <span class="server-badge" [class.offline]="!serverOnline" (click)="toggleServerCmd()" title="Click for start command">
-        <i class="bi" [class.bi-circle-fill]="serverOnline" [class.bi-circle]="!serverOnline"></i>
-        {{ serverOnline ? 'Server Online' : 'Server Offline' }}
+        <i class="bi bi-circle-fill" style="font-size:0.5rem"></i>
+        <span class="d-none d-sm-inline">{{ serverOnline ? 'Server Online' : 'Server Offline' }}</span>
+        <span class="d-sm-none">{{ serverOnline ? 'On' : 'Off' }}</span>
       </span>
 
       <!-- Angel Connected badge + Start/Stop session -->
       @if (serverOnline) {
         <span class="angel-badge" [class.disconnected]="!angelConnected">
           <i class="bi" [class.bi-wifi]="angelConnected" [class.bi-wifi-off]="!angelConnected"></i>
-          {{ angelConnected ? 'Angel Connected' : 'Not Connected' }}
+          <span class="d-none d-md-inline">{{ angelConnected ? 'Angel Connected' : 'Not Connected' }}</span>
+          <span class="d-md-none">{{ angelConnected ? 'Angel' : 'No Angel' }}</span>
         </span>
         @if (angelConnected) {
-          <button class="btn btn-sm btn-outline-danger ms-2" (click)="stopSession()" [disabled]="sessionBusy"
-                  title="Disconnect Angel One — close trading for the day">
+          <button class="btn btn-sm btn-outline-danger" (click)="stopSession()" [disabled]="sessionBusy"
+                  title="Disconnect Angel One">
             <i class="bi" [class.bi-stop-fill]="!sessionBusy" [class.bi-hourglass-split]="sessionBusy"></i>
-            {{ sessionBusy ? '…' : 'Stop' }}
+            <span class="d-none d-sm-inline ms-1">{{ sessionBusy ? '…' : 'Stop' }}</span>
           </button>
         } @else {
-          <button class="btn btn-sm btn-outline-success ms-2" (click)="startSession()" [disabled]="sessionBusy"
-                  title="Connect Angel One — start trading session">
+          <button class="btn btn-sm btn-outline-success" (click)="startSession()" [disabled]="sessionBusy"
+                  title="Connect Angel One">
             <i class="bi" [class.bi-play-fill]="!sessionBusy" [class.bi-hourglass-split]="sessionBusy"></i>
-            {{ sessionBusy ? '…' : 'Start' }}
+            <span class="d-none d-sm-inline ms-1">{{ sessionBusy ? '…' : 'Start' }}</span>
           </button>
         }
       }
@@ -64,10 +66,10 @@
     @if (showServerCmd) {
       <div class="server-cmd-bar">
         <i class="bi bi-terminal me-2 text-warning"></i>
-        <span class="text-secondary small me-2">Run in terminal:</span>
+        <span class="text-secondary small me-2 d-none d-sm-inline">Run in terminal:</span>
         <code class="server-cmd-code">{{ startCmd }}</code>
-        <button class="btn btn-sm btn-outline-secondary ms-2 py-0" (click)="showServerCmd = false">
-          <i class="bi bi-x"></i>
+        <button class="btn btn-sm btn-outline-secondary border-0 py-0 px-1" (click)="showServerCmd = false">
+          <i class="bi bi-x fs-5"></i>
         </button>
       </div>
     }
@@ -78,3 +80,14 @@
     </div>
   </div>
 </div>
+
+<!-- Mobile bottom navigation -->
+<nav class="bottom-nav d-md-none">
+  @for (item of navItems; track item.path) {
+    <a [routerLink]="item.path" routerLinkActive="active">
+      <i class="bi" [class]="item.icon"></i>
+      <span>{{ item.label }}</span>
+    </a>
+  }
+</nav>
+

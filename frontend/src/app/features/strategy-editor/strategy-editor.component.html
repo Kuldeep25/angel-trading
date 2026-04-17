@@ -1,9 +1,9 @@
-<div class="d-flex justify-content-between align-items-center mb-4">
-  <h4 class="mb-0">
-    <i class="bi bi-code-square me-2 text-accent"></i>
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+  <h4 class="mb-0 fw-bold d-flex align-items-center gap-2">
+    <i class="bi bi-code-square text-accent"></i>
     {{ isNew ? 'New Strategy' : 'Edit: ' + name }}
   </h4>
-  <button class="btn btn-accent" (click)="save()" [disabled]="saving">
+  <button class="btn btn-accent btn-sm" (click)="save()" [disabled]="saving">
     <i class="bi bi-floppy me-1"></i>
     {{ saving ? 'Saving…' : 'Save Strategy' }}
   </button>
@@ -41,5 +41,5 @@
     <span class="small">strategy.py</span>
     <span class="badge bg-secondary ms-auto">Python 3</span>
   </div>
-  <div id="monaco-container" style="height: 520px; width: 100%;"></div>
+  <div id="monaco-container" style="height: clamp(300px, 60vh, 520px); width: 100%;"></div>
 </div>

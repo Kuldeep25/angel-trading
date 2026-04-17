@@ -1,13 +1,19 @@
+<!-- Page header -->
 <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
-  <h4 class="mb-0"><i class="bi bi-activity me-2 text-accent"></i>Live Trading</h4>
+  <h4 class="mb-0 fw-bold d-flex align-items-center gap-2">
+    <i class="bi bi-activity text-accent"></i>Live Trading
+  </h4>
   <div class="d-flex gap-2">
     @if (tradingStatus.running) {
       <button class="btn btn-outline-danger btn-sm" (click)="stopTrading()">
-        <i class="bi bi-stop-fill me-1"></i> Stop All
+        <i class="bi bi-stop-fill me-1"></i>
+        <span class="d-none d-sm-inline">Stop All</span>
       </button>
     }
     <button class="btn btn-accent btn-sm" (click)="showModal = true">
-      <i class="bi bi-play-fill me-1"></i> Start Strategy
+      <i class="bi bi-play-fill me-1"></i>
+      <span class="d-none d-sm-inline">Start Strategy</span>
+      <span class="d-sm-none">Start</span>
     </button>
   </div>
 </div>
@@ -201,39 +207,39 @@
   </div>
 }
 
-<!-- Guard modal -->
+<!-- Guard modal (single instance) -->
 @if (guardModal) {
-  <div class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,0.6)">
+  <div class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,0.7);backdrop-filter:blur(4px)">
     <div class="modal-dialog modal-dialog-centered modal-sm">
       <div class="modal-content">
         <div class="modal-header">
-          <h5 class="modal-title"><i class="bi bi-shield-check me-2"></i>Position Guard</h5>
+          <h5 class="modal-title"><i class="bi bi-shield-check"></i>Position Guard</h5>
           <button type="button" class="btn-close" (click)="guardModal = false"></button>
         </div>
         <div class="modal-body">
-          <div class="fw-semibold mb-3 text-accent">{{ guardForm.symbol }}</div>
-          <p class="text-secondary small mb-3">Set any combination. Leave 0 to disable that condition. Checked every 5 s.</p>
+          <div class="fw-semibold mb-2 text-accent small">{{ guardForm.symbol }}</div>
+          <p class="text-secondary small mb-3">Leave 0 to disable. Guards are checked every 5 s.</p>
           <div class="mb-3">
-            <label class="form-label small fw-semibold">Stop Loss Price (₹)</label>
+            <label class="form-label">Stop Loss Price (₹)</label>
             <input type="number" class="form-control" [(ngModel)]="guardForm.sl_price" min="0" step="0.05">
             <div class="form-text">Exit if LTP drops to or below this price.</div>
           </div>
           <div class="mb-3">
-            <label class="form-label small fw-semibold">Target Price (₹)</label>
+            <label class="form-label">Target Price (₹)</label>
             <input type="number" class="form-control" [(ngModel)]="guardForm.target_price" min="0" step="0.05">
             <div class="form-text">Exit if LTP rises to or above this price.</div>
           </div>
           <div class="mb-3">
-            <label class="form-label small fw-semibold">Trailing SL (%)</label>
+            <label class="form-label">Trailing SL (%)</label>
             <input type="number" class="form-control" [(ngModel)]="guardForm.tsl_pct" min="0" max="50" step="0.1">
-            <div class="form-text">Exit if LTP falls X% from the highest point after guard was set. Checked before fixed SL.</div>
+            <div class="form-text">Exit if LTP falls X% from the highest point since guard was set.</div>
           </div>
           @if (error) {
-            <div class="text-danger small">{{ error }}</div>
+            <div class="alert alert-danger py-2 small">{{ error }}</div>
           }
         </div>
         <div class="modal-footer">
-          <button class="btn btn-secondary btn-sm" (click)="guardModal = false">Cancel</button>
+          <button class="btn btn-outline-secondary btn-sm" (click)="guardModal = false">Cancel</button>
           <button class="btn btn-accent btn-sm" (click)="saveGuard()">
             <i class="bi bi-shield-check me-1"></i>Set Guard
           </button>
@@ -243,102 +249,18 @@
   </div>
 }
 
-<!-- Guard modal -->
-@if (guardModal) {
-  <div class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,0.6)">
-    <div class="modal-dialog modal-dialog-centered modal-sm">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title"><i class="bi bi-shield-check me-2"></i>Position Guard</h5>
-          <button type="button" class="btn-close" (click)="guardModal = false"></button>
-        </div>
-        <div class="modal-body">
-          <div class="fw-semibold mb-3 text-accent">{{ guardForm.symbol }}</div>
-          <p class="text-secondary small mb-3">Leave 0 to disable a condition. Checked every 5 s automatically.</p>
-          <div class="mb-3">
-            <label class="form-label small fw-semibold">Stop Loss Price (₹)</label>
-            <input type="number" class="form-control" [(ngModel)]="guardForm.sl_price" min="0" step="0.05">
-            <div class="form-text">Exit if LTP drops to or below this price.</div>
-          </div>
-          <div class="mb-3">
-            <label class="form-label small fw-semibold">Target Price (₹)</label>
-            <input type="number" class="form-control" [(ngModel)]="guardForm.target_price" min="0" step="0.05">
-            <div class="form-text">Exit if LTP rises to or above this price.</div>
-          </div>
-          <div class="mb-3">
-            <label class="form-label small fw-semibold">Trailing SL (%)</label>
-            <input type="number" class="form-control" [(ngModel)]="guardForm.tsl_pct" min="0" max="50" step="0.1">
-            <div class="form-text">Exit if LTP falls X% from the highest point after guard is set.</div>
-          </div>
-          @if (error) {
-            <div class="text-danger small">{{ error }}</div>
-          }
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-secondary btn-sm" (click)="guardModal = false">Cancel</button>
-          <button class="btn btn-accent btn-sm" (click)="saveGuard()">
-            <i class="bi bi-shield-check me-1"></i>Set Guard
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-}
-
-<!-- Guard modal -->
-@if (guardModal) {
-  <div class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,0.6)">
-    <div class="modal-dialog modal-dialog-centered modal-sm">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title"><i class="bi bi-shield-check me-2"></i>Position Guard</h5>
-          <button type="button" class="btn-close" (click)="guardModal = false"></button>
-        </div>
-        <div class="modal-body">
-          <div class="fw-semibold mb-3 text-accent">{{ guardForm.symbol }}</div>
-          <p class="text-secondary small mb-3">Set any combination. Leave 0 to disable that condition. Checked every 5 s.</p>
-          <div class="mb-3">
-            <label class="form-label small fw-semibold">Stop Loss Price (₹)</label>
-            <input type="number" class="form-control" [(ngModel)]="guardForm.sl_price" min="0" step="0.05">
-            <div class="form-text">Exit if LTP drops to or below this price.</div>
-          </div>
-          <div class="mb-3">
-            <label class="form-label small fw-semibold">Target Price (₹)</label>
-            <input type="number" class="form-control" [(ngModel)]="guardForm.target_price" min="0" step="0.05">
-            <div class="form-text">Exit if LTP rises to or above this price.</div>
-          </div>
-          <div class="mb-3">
-            <label class="form-label small fw-semibold">Trailing SL (%)</label>
-            <input type="number" class="form-control" [(ngModel)]="guardForm.tsl_pct" min="0" max="50" step="0.1">
-            <div class="form-text">Exit if LTP falls X% from the highest point after guard was set. Checked before fixed SL.</div>
-          </div>
-          @if (error) {
-            <div class="text-danger small">{{ error }}</div>
-          }
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-secondary btn-sm" (click)="guardModal = false">Cancel</button>
-          <button class="btn btn-accent btn-sm" (click)="saveGuard()">
-            <i class="bi bi-shield-check me-1"></i>Set Guard
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-}
-
-<!-- Start modal -->
+<!-- Start strategy modal -->
 @if (showModal) {
-  <div class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,0.6)">
+  <div class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,0.7);backdrop-filter:blur(4px)">
     <div class="modal-dialog modal-dialog-centered">
       <div class="modal-content">
         <div class="modal-header">
-          <h5 class="modal-title">Start Strategy</h5>
+          <h5 class="modal-title"><i class="bi bi-play-circle"></i>Start Strategy</h5>
           <button type="button" class="btn-close" (click)="showModal = false"></button>
         </div>
         <div class="modal-body">
           <div class="mb-3">
-            <label class="form-label small">Strategy</label>
+            <label class="form-label">Strategy</label>
             <select class="form-select" [(ngModel)]="modalForm.strategy">
               <option value="">Select…</option>
               @for (s of strategies; track s.name) {
@@ -348,41 +270,42 @@
           </div>
           <div class="row g-2">
             <div class="col-6">
-              <label class="form-label small">Symbol</label>
-              <input class="form-control" [(ngModel)]="modalForm.symbol">
+              <label class="form-label">Symbol</label>
+              <input class="form-control" [(ngModel)]="modalForm.symbol" placeholder="e.g. NIFTY">
             </div>
             <div class="col-6">
-              <label class="form-label small">Exchange</label>
+              <label class="form-label">Exchange</label>
               <select class="form-select" [(ngModel)]="modalForm.exchange">
                 @for (e of exchanges; track e) { <option>{{ e }}</option> }
               </select>
             </div>
             <div class="col-12">
-              <label class="form-label small">Interval</label>
+              <label class="form-label">Interval</label>
               <select class="form-select" [(ngModel)]="modalForm.interval">
                 @for (i of intervals; track i) { <option>{{ i }}</option> }
               </select>
             </div>
-            <div class="col-12">
-              <div class="form-check form-switch mt-2">
+            <div class="col-12 mt-1">
+              <div class="form-check form-switch">
                 <input class="form-check-input" type="checkbox" id="paperMode" [(ngModel)]="modalForm.paper">
-                <label class="form-check-label" for="paperMode">Paper Trading (safe)</label>
+                <label class="form-check-label small" for="paperMode">Paper Trading (safe — no real orders)</label>
               </div>
               @if (!modalForm.paper) {
-                <div class="alert alert-danger py-2 mt-2 small d-flex align-items-center gap-2">
-                  <i class="bi bi-exclamation-triangle-fill"></i>
-                  <strong>LIVE MODE</strong> — real orders will be placed on Angel One!
+                <div class="alert alert-danger py-2 mt-2 small d-flex align-items-center gap-2 mb-0">
+                  <i class="bi bi-exclamation-triangle-fill flex-shrink-0"></i>
+                  <span><strong>LIVE MODE</strong> — real orders will be placed on Angel One!</span>
                 </div>
               }
             </div>
           </div>
           @if (error) {
-            <div class="text-danger small mt-2">{{ error }}</div>
+            <div class="alert alert-danger py-2 small mt-2 mb-0">{{ error }}</div>
           }
         </div>
         <div class="modal-footer">
-          <button class="btn btn-secondary" (click)="showModal = false">Cancel</button>
+          <button class="btn btn-outline-secondary" (click)="showModal = false">Cancel</button>
           <button class="btn btn-accent" (click)="startTrading()" [disabled]="loading">
+            <i class="bi" [class.bi-play-fill]="!loading" [class.bi-hourglass-split]="loading"></i>
             {{ loading ? 'Starting…' : 'Start' }}
           </button>
         </div>

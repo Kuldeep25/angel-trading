@@ -44,35 +44,38 @@ def compute_charges(
     total_turnover = buy_val + sell_val
 
     # ── 1. Brokerage ──────────────────────────────────────────────────────
-    # Angel One: ₹0 for equity delivery; ₹20 flat per executed order for all
-    # other segments (capped). We compute 2 orders per round trip.
-    if itype == "equity" and is_delivery:
-        brokerage = 0.0
+    # Angel One (per executed ORDER, NOT per lot):
+    #   Equity Delivery : min(₹20, 0.1% of order value) — each leg separately
+    #   Equity Intraday : min(₹20, 0.1% of order value) — each leg separately
+    #   Futures/Options : flat ₹20 per executed order
+    #   Currency/Commodity: flat ₹20 per executed order
+    if itype == "equity":
+        brokerage = min(20.0, buy_val * 0.001) + min(20.0, sell_val * 0.001)
     else:
-        brokerage = min(20.0, buy_val * 0.0003) + min(20.0, sell_val * 0.0003)
+        brokerage = 20.0 + 20.0  # ₹20 entry order + ₹20 exit order = ₹40
 
     # ── 2. STT (Securities Transaction Tax) ──────────────────────────────
     if itype == "equity":
         if is_delivery:
-            stt = total_turnover * 0.001        # 0.1% both sides
+            stt = total_turnover * 0.001        # 0.1% both sides (buy & sell)
         else:
-            stt = sell_val * 0.00025             # 0.025% sell side only
+            stt = sell_val * 0.00025            # 0.025% sell side only
     elif itype == "futures":
-        stt = sell_val * 0.0001                  # 0.01% sell side (contract value)
+        stt = sell_val * 0.0002                 # 0.02% sell side (contract value)
     elif itype == "options":
-        stt = sell_val * 0.000625                # 0.0625% on premium sell side
+        stt = sell_val * 0.001                  # 0.1% on sell premium
     else:
         stt = sell_val * 0.00025
 
     # ── 3. Exchange Transaction Charges ──────────────────────────────────
     if itype == "equity":
-        exc_charge = total_turnover * 0.0000325  # NSE 0.00325%
+        exc_charge = total_turnover * 0.0000297  # NSE 0.00297% (delivery & intraday)
     elif itype == "futures":
         exc_charge = total_turnover * 0.0000173  # NSE 0.00173%
     elif itype == "options":
         exc_charge = total_turnover * 0.0003503  # NSE 0.03503% on premium
     else:
-        exc_charge = total_turnover * 0.0000325
+        exc_charge = total_turnover * 0.0000297
 
     # ── 4. SEBI Charges (₹10 per crore = 0.000001 of turnover) ───────────
     sebi = total_turnover * 0.000001

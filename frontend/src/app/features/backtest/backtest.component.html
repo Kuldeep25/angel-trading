@@ -1,10 +1,13 @@
-<h4 class="mb-4"><i class="bi bi-bar-chart-line me-2 text-accent"></i>Backtest Engine</h4>
+<h4 class="mb-4 fw-bold d-flex align-items-center gap-2">
+  <i class="bi bi-bar-chart-line text-accent"></i>Backtest Engine
+</h4>
 
 <!-- Form -->
 <div class="card mb-4">
   <div class="card-body">
     <div class="row g-3">
-      <div class="col-12 col-md-4">
+      <!-- Row 1: Strategy full width -->
+      <div class="col-12">
         <label class="form-label small">Strategy *</label>
         <select class="form-select" [(ngModel)]="strategyName" (ngModelChange)="onStrategyChange()">
           <option value="">Select strategy…</option>
@@ -13,7 +16,9 @@
           }
         </select>
       </div>
-      <div class="col-6 col-md-2">
+
+      <!-- Row 2: Instrument | Symbol | Exchange | Interval -->
+      <div class="col-6 col-md-3">
         <label class="form-label small">Instrument Type</label>
         <select class="form-select" [(ngModel)]="instrumentType" (ngModelChange)="onInstrumentTypeChange()">
           @for (t of instrumentTypes; track t.value) {
@@ -21,7 +26,7 @@
           }
         </select>
       </div>
-      <div class="col-6 col-md-2" style="position:relative">
+      <div class="col-6 col-md-3" style="position:relative">
         <label class="form-label small">Symbol</label>
         <div class="input-group">
           <input class="form-control" placeholder="Search…"
@@ -47,61 +52,66 @@
           </div>
         }
       </div>
-      <div class="col-6 col-md-2">
+      <div class="col-6 col-md-3">
         <label class="form-label small">Exchange <span class="text-secondary" style="font-size:0.75em">(auto)</span></label>
         <input class="form-control" [value]="exchange" readonly tabindex="-1"
                style="background:transparent;cursor:default;color:#8b949e;border-color:#30363d;">
       </div>
-      <div class="col-6 col-md-2">
+      <div class="col-6 col-md-3">
         <label class="form-label small">Interval</label>
         <select class="form-select" [(ngModel)]="interval">
           @for (i of intervals; track i) { <option>{{ i }}</option> }
         </select>
       </div>
-      <div class="col-6 col-md-2">
+
+      <!-- Row 3: Capital | From Date | To Date -->
+      <div class="col-12 col-sm-4 col-md-4">
         <label class="form-label small">Capital (₹)</label>
         <input class="form-control" type="number" [(ngModel)]="capital">
       </div>
-      <div class="col-6 col-md-2">
+      <div class="col-6 col-sm-4 col-md-4">
         <label class="form-label small">From Date</label>
         <input class="form-control" type="date" [(ngModel)]="fromDate">
       </div>
-      <div class="col-6 col-md-2">
+      <div class="col-6 col-sm-4 col-md-4">
         <label class="form-label small">To Date</label>
         <input class="form-control" type="date" [(ngModel)]="toDate">
       </div>
-      <div class="col-4 col-md-2">
+
+      <!-- Row 4: SL % | Trailing SL % | Target % — each col-4 at all sizes -->
+      <div class="col-4">
         <label class="form-label small">SL %
           @if (defaultSlPct !== null) {
-            <span class="text-secondary ms-1" style="font-size:0.75em">(strategy: {{ defaultSlPct }})</span>
+            <span class="text-secondary ms-1" style="font-size:0.75em">(default: {{ defaultSlPct }})</span>
           }
         </label>
         <input class="form-control" type="number" step="0.5" min="0" [(ngModel)]="slPct"
                placeholder="{{ defaultSlPct !== null ? defaultSlPct : '0 = off' }}">
       </div>
-      <div class="col-4 col-md-2">
+      <div class="col-4">
         <label class="form-label small">Trailing SL %
           @if (defaultTslPct !== null) {
-            <span class="text-secondary ms-1" style="font-size:0.75em">(strategy: {{ defaultTslPct }})</span>
+            <span class="text-secondary ms-1" style="font-size:0.75em">(default: {{ defaultTslPct }})</span>
           }
         </label>
         <input class="form-control" type="number" step="0.5" min="0" [(ngModel)]="tslPct"
                placeholder="{{ defaultTslPct !== null ? defaultTslPct : '0 = off' }}">
       </div>
-      <div class="col-4 col-md-2">
+      <div class="col-4">
         <label class="form-label small">Target %
           @if (defaultTargetPct !== null) {
-            <span class="text-secondary ms-1" style="font-size:0.75em">(strategy: {{ defaultTargetPct }})</span>
+            <span class="text-secondary ms-1" style="font-size:0.75em">(default: {{ defaultTargetPct }})</span>
           }
         </label>
         <input class="form-control" type="number" step="0.5" min="0" [(ngModel)]="targetPct"
                placeholder="{{ defaultTargetPct !== null ? defaultTargetPct : '0 = off' }}">
       </div>
-      <div class="col-4 col-md-2 d-flex align-items-end">
+
+      <!-- Row 5: Run button — full width on mobile/tablet, inline on desktop -->
+      <div class="col-12">
         <button class="btn btn-accent w-100" (click)="run()" [disabled]="running">
-          <i class="bi" [class.bi-play-fill]="!running" [class.bi-hourglass-split]="running"></i>
-          <span class="d-none d-xl-inline">{{ running ? 'Running…' : 'Run Backtest' }}</span>
-          <span class="d-xl-none">{{ running ? '…' : 'Run' }}</span>
+          <i class="bi me-1" [class.bi-play-fill]="!running" [class.bi-hourglass-split]="running"></i>
+          {{ running ? 'Running…' : 'Run Backtest' }}
         </button>
       </div>
     </div>
@@ -138,16 +148,48 @@
     }
     &nbsp;| Lot size: <strong>{{ result.config?.lot_size ?? 1 }}</strong>
   </div>
-  <!-- Metric tiles — 10 tiles: 2×5 on xl, 2×4+2 on md, 2-col on mobile -->
-  <div class="row g-2 mb-4">
-    @for (m of metricCards(); track m.label) {
-      <div class="col-6 col-md-3 col-xl">
-        <div class="metric-tile">
-          <div class="metric-label"><i class="bi {{ m.icon }} me-1"></i>{{ m.label }}</div>
-          <div class="metric-value" [ngClass]="m.cls">{{ m.value }}</div>
+  <!-- Metric tiles — 3 groups: P&L | Trade Stats | Risk -->
+  <div class="mb-4">
+
+    <!-- Group 1: P&L (Net P&L · Gross P&L · Total Charges · Net Return · Final Equity) -->
+    <div class="metrics-group-label">P &amp; L</div>
+    <div class="row g-2 mb-3">
+      @for (m of metricCards().slice(0, 5); track m.label) {
+        <div class="col-6 col-sm-4 col-md">
+          <div class="metric-tile">
+            <div class="metric-label"><i class="bi {{ m.icon }} me-1"></i>{{ m.label }}</div>
+            <div class="metric-value" [ngClass]="m.cls">{{ m.value }}</div>
+          </div>
         </div>
-      </div>
-    }
+      }
+    </div>
+
+    <!-- Group 2: Trade Stats (Win Rate · Winning · Losing · Total · Avg/Trade) -->
+    <div class="metrics-group-label">Trade Statistics</div>
+    <div class="row g-2 mb-3">
+      @for (m of metricCards().slice(5, 10); track m.label) {
+        <div class="col-6 col-sm-4 col-md">
+          <div class="metric-tile">
+            <div class="metric-label"><i class="bi {{ m.icon }} me-1"></i>{{ m.label }}</div>
+            <div class="metric-value" [ngClass]="m.cls">{{ m.value }}</div>
+          </div>
+        </div>
+      }
+    </div>
+
+    <!-- Group 3: Risk (Max Drawdown · Sharpe Ratio) -->
+    <div class="metrics-group-label">Risk</div>
+    <div class="row g-2 mb-3">
+      @for (m of metricCards().slice(10, 12); track m.label) {
+        <div class="col-6 col-sm-4 col-md">
+          <div class="metric-tile">
+            <div class="metric-label"><i class="bi {{ m.icon }} me-1"></i>{{ m.label }}</div>
+            <div class="metric-value" [ngClass]="m.cls">{{ m.value }}</div>
+          </div>
+        </div>
+      }
+    </div>
+
   </div>
 
           <!-- Charges breakdown card -->
