@@ -1,5 +1,18 @@
 <h4 class="mb-4"><i class="bi bi-mic me-2 text-accent"></i>Voice Commands</h4>
 
+<!-- Speech API status bar -->
+@if (!speechSupported) {
+  <div class="alert alert-warning d-flex align-items-center gap-2 mb-3">
+    <i class="bi bi-exclamation-triangle-fill"></i>
+    <span><strong>Speech recognition not available.</strong> Use <strong>Chrome or Edge</strong> on <strong>localhost</strong>. You can still type commands below.</span>
+  </div>
+} @else {
+  <div class="alert alert-success d-flex align-items-center gap-2 mb-3 py-2">
+    <i class="bi bi-check-circle-fill"></i>
+    <span class="small">Speech recognition ready — click the mic button and allow microphone access when prompted.</span>
+  </div>
+}
+
 <div class="row g-4">
   <!-- Mic panel -->
   <div class="col-12 col-md-6">
@@ -24,6 +37,13 @@
           {{ listening ? 'Listening… speak now' : 'Tap to start listening' }}
         </p>
 
+        @if (interimTranscript) {
+          <div class="alert alert-secondary py-2 text-start mb-3 opacity-75">
+            <small class="text-secondary d-block mb-1">Hearing…</small>
+            <span class="fst-italic">"{{ interimTranscript }}"</span>
+          </div>
+        }
+
         @if (transcript) {
           <div class="alert alert-secondary py-2 text-start mb-3">
             <small class="text-secondary d-block mb-1">You said:</small>
@@ -41,6 +61,16 @@
         @if (error) {
           <div class="alert alert-danger py-2">{{ error }}</div>
         }
+
+        <!-- Manual text fallback -->
+        <div class="input-group mt-3">
+          <input class="form-control form-control-sm" placeholder="Or type a command…"
+                 [(ngModel)]="manualText"
+                 (keydown.enter)="sendManual()">
+          <button class="btn btn-sm btn-outline-primary" (click)="sendManual()">
+            <i class="bi bi-send"></i>
+          </button>
+        </div>
       </div>
     </div>
 

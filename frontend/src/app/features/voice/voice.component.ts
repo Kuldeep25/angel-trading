@@ -1,45 +1,67 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, NgZone } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../core/services/api.service';
 
 @Component({
   selector: 'app-voice',
-  imports: [CommonModule],
+  imports: [CommonModule, FormsModule],
   templateUrl: './voice.component.html',
 })
 export class VoiceComponent implements OnInit, OnDestroy {
   commands: any[] = [];
   transcript = '';
+  interimTranscript = '';
   result = '';
   listening = false;
   error = '';
+  manualText = '';
+  speechSupported = false;
   commandHistory: { text: string; result: string; time: string }[] = [];
 
   private recognition: any;
   private hasWebSpeech = false;
 
-  constructor(private api: ApiService) {}
+  constructor(private api: ApiService, private zone: NgZone) {}
 
   ngOnInit(): void {
     this.api.getVoiceCommands().subscribe({ next: (c) => this.commands = c });
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (SpeechRecognition) {
       this.hasWebSpeech = true;
+      this.speechSupported = true;
       this.recognition = new SpeechRecognition();
       this.recognition.lang = 'en-IN';
       this.recognition.continuous = false;
-      this.recognition.interimResults = false;
+      this.recognition.interimResults = true;
       this.recognition.onresult = (event: any) => {
-        const text = event.results[0][0].transcript;
-        this.transcript = text;
-        this.listening = false;
-        this.execute(text);
+        let interim = '';
+        let final = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const t = event.results[i][0].transcript;
+          if (event.results[i].isFinal) final += t;
+          else interim += t;
+        }
+        this.zone.run(() => {
+          if (interim) this.interimTranscript = interim;
+          if (final) {
+            this.transcript = final;
+            this.interimTranscript = '';
+            this.listening = false;
+            this.execute(final);
+          }
+        });
       };
-      this.recognition.onerror = () => {
-        this.error = 'Microphone error. Check browser permissions.';
-        this.listening = false;
+      this.recognition.onerror = (e: any) => {
+        this.zone.run(() => {
+          this.error = 'Microphone error: ' + (e?.error ?? 'check browser permissions');
+          this.interimTranscript = '';
+          this.listening = false;
+        });
       };
-      this.recognition.onend = () => { this.listening = false; };
+      this.recognition.onend = () => {
+        this.zone.run(() => { this.interimTranscript = ''; this.listening = false; });
+      };
     }
   }
 
@@ -56,20 +78,25 @@ export class VoiceComponent implements OnInit, OnDestroy {
       this.transcript = '';
       this.result = '';
       this.listening = true;
-      this.recognition.start();
+      try {
+        this.recognition.start();
+      } catch (e: any) {
+        this.error = 'Could not start mic: ' + (e?.message ?? String(e));
+        this.listening = false;
+      }
     } else {
-      // fallback: use backend microphone
-      this.error = '';
-      this.listening = true;
-      this.api.voiceListen().subscribe({
-        next: (r: any) => {
-          this.transcript = r.text;
-          this.listening = false;
-          if (r.text) this.execute(r.text);
-        },
-        error: () => { this.error = 'Backend voice listen failed.'; this.listening = false; }
-      });
+      this.error = 'Speech recognition not supported in this browser. Use Chrome or Edge, or type a command below.';
     }
+  }
+
+  sendManual(): void {
+    const text = this.manualText.trim();
+    if (!text) return;
+    this.transcript = text;
+    this.manualText = '';
+    this.result = '';
+    this.error = '';
+    this.execute(text);
   }
 
   execute(text: string): void {

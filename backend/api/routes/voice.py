@@ -33,4 +33,12 @@ def voice_commands():
     import json, os
     path = os.path.join(os.path.dirname(__file__), "..", "..", "config", "voice_commands.json")
     with open(path, encoding="utf-8") as f:
-        return json.load(f)
+        data = json.load(f)
+    # Normalise to a flat list regardless of whether the file is
+    # { "commands": { "cmd": {...} } }  or  [ {...}, ... ]
+    if isinstance(data, list):
+        return data
+    cmds = data.get("commands", data)
+    if isinstance(cmds, dict):
+        return [{"command": k, **v} for k, v in cmds.items()]
+    return cmds
