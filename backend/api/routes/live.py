@@ -81,13 +81,31 @@ def stop_trading(strategy_name: str, symbol: str):
     return {"status": "stopped", "key": key}
 
 
+@router.post("/live/stop-all")
+def stop_all_trading():
+    with _running_lock:
+        keys = list(_running.keys())
+    for key in keys:
+        with _running_lock:
+            entry = _running.pop(key, None)
+        if entry:
+            entry["_stop"].set()
+    logger.info("All strategies stopped: %s", keys)
+    return {"status": "stopped", "count": len(keys)}
+
+
 @router.get("/live/status")
 def trading_status():
     with _running_lock:
-        return [
+        active = [
             {k: v for k, v in entry.items() if not k.startswith("_")}
             for entry in _running.values()
         ]
+    return {
+        "running": len(active) > 0,
+        "active_strategies": [e["key"] for e in active],
+        "details": active,
+    }
 
 
 # ── Background trading loop ───────────────────────────────────────────────

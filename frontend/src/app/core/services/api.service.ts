@@ -74,12 +74,11 @@ export class ApiService {
   }
 
   stopTrading(strategyName?: string, symbol?: string): Observable<any> {
-    let url = `${BASE}/live/stop`;
-    const params: string[] = [];
-    if (strategyName) params.push(`strategy_name=${encodeURIComponent(strategyName)}`);
-    if (symbol) params.push(`symbol=${encodeURIComponent(symbol)}`);
-    if (params.length) url += '?' + params.join('&');
-    return this.http.post(url, {});
+    if (strategyName && symbol) {
+      return this.http.post(
+        `${BASE}/live/stop?strategy_name=${encodeURIComponent(strategyName)}&symbol=${encodeURIComponent(symbol)}`, {});
+    }
+    return this.http.post(`${BASE}/live/stop-all`, {});
   }
 
   tradingStatus(): Observable<any[]> {

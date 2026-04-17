@@ -60,15 +60,20 @@ export class LiveTradingComponent implements OnInit, OnDestroy {
     if (!this.modalForm.strategy) { this.error = 'Select a strategy.'; return; }
     this.loading = true;
     this.error = '';
-    this.api.startTrading(this.modalForm).subscribe({
+    const payload = { ...this.modalForm, strategy_name: this.modalForm.strategy };
+    this.api.startTrading(payload).subscribe({
       next: () => { this.showModal = false; this.loading = false; this.loadAll(); },
       error: (e) => { this.error = e?.error?.detail || 'Failed to start.'; this.loading = false; }
     });
   }
 
-  stopTrading(): void {
-    if (!confirm('Stop all running strategies?')) return;
-    this.api.stopTrading().subscribe({ next: () => this.loadAll() });
+  stopTrading(strategyName?: string, symbol?: string): void {
+    if (strategyName && symbol) {
+      this.api.stopTrading(strategyName, symbol).subscribe({ next: () => this.loadAll() });
+    } else {
+      if (!confirm('Stop ALL running strategies?')) return;
+      this.api.stopTrading().subscribe({ next: () => this.loadAll() });
+    }
   }
 
   exit(symbol: string): void {

@@ -22,8 +22,14 @@
          [class.text-secondary]="!tradingStatus.running"></i>
       {{ tradingStatus.running ? 'Running' : 'Idle' }}
     </span>
-    @for (s of tradingStatus.active_strategies; track s) {
-      <span class="badge bg-primary">{{ s }}</span>
+    @for (d of (tradingStatus.details || []); track d.key) {
+      <span class="badge d-inline-flex align-items-center gap-1"
+            [class.bg-danger]="!d.paper" [class.bg-secondary]="d.paper">
+        <i class="bi" [class.bi-lightning-charge-fill]="!d.paper" [class.bi-journal-text]="d.paper"></i>
+        {{ d.key }}
+        <button type="button" class="btn-close btn-close-white ms-1" style="font-size:0.6rem"
+                (click)="stopTrading(d.strategy, d.symbol)"></button>
+      </span>
     }
     <span class="ms-auto text-secondary small">Auto-refresh every 5 s</span>
   </div>
@@ -152,6 +158,12 @@
                 <input class="form-check-input" type="checkbox" id="paperMode" [(ngModel)]="modalForm.paper">
                 <label class="form-check-label" for="paperMode">Paper Trading (safe)</label>
               </div>
+              @if (!modalForm.paper) {
+                <div class="alert alert-danger py-2 mt-2 small d-flex align-items-center gap-2">
+                  <i class="bi bi-exclamation-triangle-fill"></i>
+                  <strong>LIVE MODE</strong> — real orders will be placed on Angel One!
+                </div>
+              }
             </div>
           </div>
           @if (error) {
