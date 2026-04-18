@@ -15,6 +15,11 @@ class BacktestRequest(BaseModel):
     tsl_pct: float    = 0.0
     target_pct: float = 0.0
     position_size_pct: float = 95.0
+    slippage_pct: float = 0.05         # % per fill (entry + exit); 0 to disable
+    position_sizing: str = "fixed"     # "fixed" | "compounding"
+    max_trades_per_day: int = 0        # 0 = unlimited
+    intraday_squareoff: bool = True    # Force close at 15:15 IST for intraday intervals
+    allow_reentry: bool = True         # False = no new entry after exit on same day
 
 
 class StrategyAddRequest(BaseModel):

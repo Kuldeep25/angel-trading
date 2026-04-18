@@ -30,7 +30,12 @@ def backtest(req: BacktestRequest):
         sl_pct            = req.sl_pct,
         tsl_pct           = req.tsl_pct,
         target_pct        = req.target_pct,
-        position_size_pct = req.position_size_pct,
+        position_size_pct  = req.position_size_pct,
+        slippage_pct       = req.slippage_pct,
+        position_sizing    = req.position_sizing,
+        max_trades_per_day = req.max_trades_per_day,
+        intraday_squareoff = req.intraday_squareoff,
+        allow_reentry      = req.allow_reentry,
     )
     try:
         result = run_backtest(cfg)

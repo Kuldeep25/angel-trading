@@ -92,11 +92,24 @@ async def lifespan(app: FastAPI):
     from execution.paper_trading import guard_engine as _guard_engine
     _guard_engine.start()
 
+    # 6. Initialise option chain snapshot DB and auto-start collector
+    from options.snapshot_db import init_db as _init_snapshot_db
+    from options.bhavcopy_db import init_db as _init_bhavcopy_db
+    from options import collector as _oc_collector
+    _init_snapshot_db()
+    _init_bhavcopy_db()
+    if angel_client.is_connected:
+        _oc_collector.start()   # collects every 5 min during market hours
+        logger.info("Option chain collector auto-started.")
+    else:
+        logger.info("Option chain collector NOT started — Angel One not connected.")
+
     logger.info("=== Startup complete. API ready. ===")
     yield
 
-    # ── Shutdown ─────────────────────────────────────────────────────────────
+    # ── Shutdown ─────────────────────────────────────────────────────
     logger.info("Shutting down…")
+    await _oc_collector.stop()
     _guard_engine.stop()
     angel_client.disconnect()
 
@@ -125,15 +138,17 @@ app.add_middleware(
 
 # ── Routers ───────────────────────────────────────────────────────────────────
 from api.routes import ping, backtest, strategies, live, positions, voice, symbols, account  # noqa: E402
+from api.option_chain import router as _option_chain_router  # noqa: E402
 
-app.include_router(ping.router,       tags=["Health"])
-app.include_router(backtest.router,   tags=["Backtest"])
-app.include_router(strategies.router, tags=["Strategies"])
-app.include_router(live.router,       tags=["Live Trading"])
-app.include_router(positions.router,  tags=["Positions"])
-app.include_router(account.router,    tags=["Account"])
-app.include_router(voice.router,      tags=["Voice"])
-app.include_router(symbols.router,    tags=["Symbols"])
+app.include_router(ping.router,             tags=["Health"])
+app.include_router(backtest.router,         tags=["Backtest"])
+app.include_router(strategies.router,       tags=["Strategies"])
+app.include_router(live.router,             tags=["Live Trading"])
+app.include_router(positions.router,        tags=["Positions"])
+app.include_router(account.router,          tags=["Account"])
+app.include_router(voice.router,            tags=["Voice"])
+app.include_router(symbols.router,          tags=["Symbols"])
+app.include_router(_option_chain_router,    tags=["Option Chain"])
 
 
 @app.post("/reconnect", tags=["Health"])

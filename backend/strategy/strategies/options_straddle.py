@@ -19,6 +19,8 @@ from __future__ import annotations
 
 import pandas as pd
 
+from backtest.option_pricer import add_bsm_premium
+
 
 def _atm_strike(spot: float, gap: int) -> float:
     """Round spot to the nearest strike interval."""
@@ -44,13 +46,11 @@ class Strategy:
         target_pct: float = 0.30,
         stoploss_pct: float = 0.20,
         strike_gap: int | None = None,   # None = auto-detect from price level
-        premium_pct: float = 0.015,
     ) -> None:
         self.entry_bar    = entry_bar
         self.target_pct   = target_pct
         self.stoploss_pct = stoploss_pct
         self.strike_gap   = strike_gap   # resolved in generate()
-        self.premium_pct  = premium_pct
 
     def _resolve_gap(self, median_close: float) -> int:
         """Auto-detect strike interval from typical price level."""
@@ -66,9 +66,10 @@ class Strategy:
         df = df.copy()
         gap = self._resolve_gap(float(df["close"].median()))
 
-        df["signal"]      = 0
-        df["atm_strike"]  = df["close"].apply(lambda s: _atm_strike(s, gap))
-        df["atm_premium"] = (df["atm_strike"] * self.premium_pct).round(2)
+        df["signal"]     = 0
+        df["atm_strike"] = df["close"].apply(lambda s: _atm_strike(s, gap))
+        # BSM pricing: accounts for theta decay + historical volatility
+        df = add_bsm_premium(df, option_type="STRADDLE")
 
         df["_date"] = pd.to_datetime(df["timestamp"]).dt.date
 

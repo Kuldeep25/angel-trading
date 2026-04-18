@@ -47,8 +47,6 @@ class Strategy:
     sl_pct     = 0.0   # rely on EMA5 trailing exit, not fixed SL
     tsl_pct    = 0.0
     target_pct = 0.0
-    premium_pct = 0.015  # 1.5% of ATM strike as estimated premium
-
     def generate(self, df: pd.DataFrame) -> pd.DataFrame:
         df = df.copy().reset_index(drop=True)
 
@@ -62,10 +60,11 @@ class Strategy:
         df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
         df["hour"] = df["timestamp"].dt.hour
 
-        # ── ATM strike + estimated premium (enables options position sizing) ─
+        # ── ATM strike + BSM premium (replaces flat 1.5% synthetic estimate) ─
         gap = _auto_strike_gap(float(df["close"].median()))
-        df["atm_strike"]  = df["close"].apply(lambda c: _atm(c, gap))
-        df["atm_premium"] = (df["atm_strike"] * self.premium_pct).round(2)
+        df["atm_strike"] = df["close"].apply(lambda c: _atm(c, gap))
+        from backtest.option_pricer import add_bsm_premium
+        df = add_bsm_premium(df, option_type="CE")
 
         df["signal"]      = 0
         df["option_type"] = ""

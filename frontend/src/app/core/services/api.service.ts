@@ -59,6 +59,30 @@ export class ApiService {
     return this.http.post(`${BASE}/backtest`, payload);
   }
 
+  // ── Bhavcopy (NSE F&O historical data) ───────────────────────────────────
+  downloadBhavcopy(fromDate: string, toDate: string): Observable<any> {
+    return this.http.post(`${BASE}/option-chain/bhavcopy/download`, {
+      from_date: fromDate,
+      to_date:   toDate,
+    });
+  }
+
+  getBhavcopySatus(): Observable<any> {
+    return this.http.get(`${BASE}/option-chain/bhavcopy/status`);
+  }
+
+  // ── Angel One 5-min option OHLC importer ─────────────────────────────────
+  importAngelOhlc(symbols: string[], daysBack: number): Observable<any> {
+    return this.http.post(`${BASE}/option-chain/import-angel-ohlc`, {
+      symbols,
+      days_back: daysBack,
+    });
+  }
+
+  getAngelImportStatus(): Observable<any> {
+    return this.http.get(`${BASE}/option-chain/import-angel-ohlc/status`);
+  }
+
   // ── Symbols ──────────────────────────────────────────────────────────────
   searchSymbols(q: string, instrumentType: string, limit = 50): Observable<any[]> {
     const params = new HttpParams()

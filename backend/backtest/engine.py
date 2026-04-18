@@ -37,6 +37,13 @@ class BacktestConfig:
     tsl_pct: float = 0.0   # trailing stop-loss %  (0 = disabled)
     target_pct: float = 0.0  # profit target %     (0 = disabled)
     position_size_pct: float = 95.0  # % of capital to deploy per trade
+    slippage_pct: float = 0.05       # slippage % per fill (both entry and exit)
+    position_sizing: str = "compounding"   # "compounding" | "fixed"
+    # compounding: deploy position_size_pct of *running* capital each trade
+    # fixed:       deploy position_size_pct of *initial* capital each trade (like Streak/AlgoTest)
+    max_trades_per_day: int = 0      # 0 = unlimited (Streak default = unlimited unless set)
+    intraday_squareoff: bool = True  # Force close all positions at 15:15 IST for intraday intervals
+    allow_reentry: bool = True       # False = no new entry after an exit on the same day
 
 
 # Trade is defined in backtest.models to avoid circular imports
@@ -227,6 +234,11 @@ def run_backtest(cfg: BacktestConfig) -> Dict[str, Any]:
             "actual_to":   str(df["timestamp"].iloc[-1]) if not df.empty else cfg.to_date,
             "capital": cfg.capital,
             "lot_size": lot_size,
+            "slippage_pct": cfg.slippage_pct,
+            "position_sizing": cfg.position_sizing,
+            "max_trades_per_day": cfg.max_trades_per_day,
+            "intraday_squareoff": cfg.intraday_squareoff,
+            "allow_reentry": cfg.allow_reentry,
         },
         "summary": summary,
         "equity_curve": equity_curve,
@@ -251,102 +263,332 @@ def _opt_fields(row: pd.Series) -> tuple[bool, float, float, str]:
     )
 
 
+def _apply_slippage(price: float, side: str, slippage_pct: float) -> float:
+    """
+    Apply slippage to a fill price.
+    BUY fills pay slightly more; SELL fills receive slightly less.
+    """
+    if slippage_pct <= 0:
+        return price
+    factor = 1 + slippage_pct / 100 if side == "BUY" else 1 - slippage_pct / 100
+    return round(price * factor, 2)
+
+
+def _opt_premium_at_spot(
+    row: pd.Series,
+    spot: float,
+    opt_type: str,
+    dte: int = 7,
+) -> float:
+    """
+    Estimate option premium at a given spot price using BSM.
+    Used to approximate intrabar option high/low from underlying high/low.
+    """
+    try:
+        from backtest.option_pricer import (
+            bs_atm_premium, _hist_vol_series, RISK_FREE_RATE, MIN_T
+        )
+        import math
+        # Use the bar's own sigma from hist_vol column if available
+        sigma = float(row.get("hist_vol", 0.20))
+        if math.isnan(sigma) or sigma <= 0:
+            sigma = 0.20
+        strike = float(row.get("atm_strike", spot))
+        T = max(dte / 365.0, MIN_T)
+        return bs_atm_premium(spot, strike, T, opt_type, RISK_FREE_RATE, sigma)
+    except Exception:
+        # Fallback: scale from close premium by ratio of spots
+        close_spot    = float(row["close"])
+        close_premium = float(row.get("atm_premium", close_spot))
+        if close_spot > 0:
+            return close_premium * (spot / close_spot)
+        return close_premium
+
+
+def _intrabar_exit(
+    row: pd.Series,
+    position: int,
+    entry_price: float,
+    high_since_entry: float,
+    low_since_entry: float,
+    sl_pct: float,
+    tsl_pct: float,
+    target_pct: float,
+    is_opt: bool,
+    opt_type: str,
+    dte: int,
+) -> tuple[Optional[str], float]:
+    """
+    Check if SL / TSL / Target was breached *within* a candle using OHLC.
+
+    Returns (exit_reason, fill_price) or (None, 0.0) if no breach.
+
+    Rules (same as Streak / AlgoTest):
+    • For equity/futures: compare candle high & low directly
+    • For options:        estimate option high & low via BSM at underlying extremes
+    • If both SL and Target hit same candle → SL wins (pessimistic / conservative)
+    • Fill price = exact SL/Target price (not candle close)
+    """
+    bar_high = float(row.get("high", row["close"]))
+    bar_low  = float(row.get("low",  row["close"]))
+
+    if is_opt:
+        # For long options the option price moves with the underlying.
+        # CE: gains when spot rises, loses when spot falls → worst from spot_low
+        # PE: gains when spot falls, loses when spot rises → worst from spot_high
+        # STRADDLE: combined premium; approximate with the larger of the two extremes
+        ot = opt_type.upper()
+        if ot in ("CE", "CALL"):
+            opt_bar_high = _opt_premium_at_spot(row, bar_high, "CE", dte)
+            opt_bar_low  = _opt_premium_at_spot(row, bar_low,  "CE", dte)
+        elif ot in ("PE", "PUT"):
+            opt_bar_high = _opt_premium_at_spot(row, bar_low,  "PE", dte)  # low spot → high PE
+            opt_bar_low  = _opt_premium_at_spot(row, bar_high, "PE", dte)  # high spot → low PE
+        else:  # STRADDLE
+            ce_high = _opt_premium_at_spot(row, bar_high, "CE", dte)
+            ce_low  = _opt_premium_at_spot(row, bar_low,  "CE", dte)
+            pe_high = _opt_premium_at_spot(row, bar_low,  "PE", dte)
+            pe_low  = _opt_premium_at_spot(row, bar_high, "PE", dte)
+            opt_bar_high = ce_high + pe_high
+            opt_bar_low  = ce_low  + pe_low
+        bar_high, bar_low = opt_bar_high, opt_bar_low
+
+    if position > 0:   # long
+        sl_price  = entry_price * (1 - sl_pct / 100)   if sl_pct     > 0 else None
+        tsl_price = high_since_entry * (1 - tsl_pct / 100) if tsl_pct > 0 else None
+        tgt_price = entry_price * (1 + target_pct / 100) if target_pct > 0 else None
+
+        hit_sl  = sl_price  is not None and bar_low  <= sl_price
+        hit_tsl = tsl_price is not None and bar_low  <= tsl_price
+        hit_tgt = tgt_price is not None and bar_high >= tgt_price
+
+        # Pessimistic: if SL/TSL and Target both hit same candle → SL first
+        if (hit_sl or hit_tsl) and hit_tgt:
+            # Use whichever SL is tighter
+            if hit_sl and hit_tsl:
+                return ("SL", sl_price) if sl_price >= tsl_price else ("TSL", tsl_price)
+            return ("SL", sl_price) if hit_sl else ("TSL", tsl_price)
+        if hit_tgt:
+            return ("TARGET", tgt_price)
+        if hit_sl and hit_tsl:
+            return ("SL", sl_price) if sl_price >= tsl_price else ("TSL", tsl_price)
+        if hit_sl:
+            return ("SL", sl_price)
+        if hit_tsl:
+            return ("TSL", tsl_price)
+
+    elif position < 0:   # short (futures / equity short)
+        sl_price  = entry_price * (1 + sl_pct / 100)   if sl_pct     > 0 else None
+        tsl_price = low_since_entry  * (1 + tsl_pct / 100) if tsl_pct > 0 else None
+        tgt_price = entry_price * (1 - target_pct / 100) if target_pct > 0 else None
+
+        hit_sl  = sl_price  is not None and bar_high >= sl_price
+        hit_tsl = tsl_price is not None and bar_high >= tsl_price
+        hit_tgt = tgt_price is not None and bar_low  <= tgt_price
+
+        if (hit_sl or hit_tsl) and hit_tgt:
+            if hit_sl and hit_tsl:
+                return ("SL", sl_price) if sl_price <= tsl_price else ("TSL", tsl_price)
+            return ("SL", sl_price) if hit_sl else ("TSL", tsl_price)
+        if hit_tgt:
+            return ("TARGET", tgt_price)
+        if hit_sl and hit_tsl:
+            return ("SL", sl_price) if sl_price <= tsl_price else ("TSL", tsl_price)
+        if hit_sl:
+            return ("SL", sl_price)
+        if hit_tsl:
+            return ("TSL", tsl_price)
+
+    return (None, 0.0)
+
+
+_INTRADAY_INTERVALS = {
+    "ONE_MINUTE", "THREE_MINUTE", "FIVE_MINUTE", "TEN_MINUTE",
+    "FIFTEEN_MINUTE", "THIRTY_MINUTE", "ONE_HOUR",
+}
+_SQUAREOFF_HOUR   = 15
+_SQUAREOFF_MINUTE = 15   # 15:15 IST — matches Streak / Zerodha / AlgoTest default
+
+
+def _bar_time(ts: str) -> Optional[tuple]:
+    """Extract (date_str, hour, minute) from a timestamp string, or None."""
+    try:
+        # Handles "2024-06-01 09:15:00", "2024-06-01T09:15:00", "2024-06-01 09:15"
+        clean = ts.replace("T", " ").split(".")[0].strip()
+        parts = clean.split(" ")
+        date_part = parts[0]
+        if len(parts) > 1:
+            hm = parts[1].split(":")
+            return date_part, int(hm[0]), int(hm[1])
+        return date_part, None, None
+    except Exception:
+        return None
+
+
+def _is_squareoff_bar(ts: str) -> bool:
+    """True if this bar is at or after 15:15 IST."""
+    t = _bar_time(ts)
+    if not t or t[1] is None:
+        return False
+    _, h, m = t
+    return (h > _SQUAREOFF_HOUR) or (h == _SQUAREOFF_HOUR and m >= _SQUAREOFF_MINUTE)
+
+
 def _simulate(
     df: pd.DataFrame,
     cfg: BacktestConfig,
     lot_size: int,
 ) -> List[Trade]:
+    """
+    Simulate trades matching Streak / AlgoTest methodology:
+
+    1. NEXT-CANDLE ENTRY    — signal on candle[i].close → fill at candle[i+1].open
+    2. INTRABAR SL/TARGET   — OHLC-based, fill at exact SL/Target price
+    3. PESSIMISTIC RULE     — SL wins if both SL and Target hit same candle
+    4. SLIPPAGE             — applied to every entry and exit fill
+    5. INTRADAY SQUARE-OFF  — all positions force-closed at 15:15 IST for
+                              intraday intervals (matches Streak/Zerodha behaviour)
+    6. FIXED POSITION SIZE  — option to use initial capital for sizing (not running)
+    7. MAX TRADES PER DAY   — hard cap; no new entries once limit hit for that day
+    8. NO RE-ENTRY          — optional: skip new entries after an exit on same day
+    """
     trades: List[Trade] = []
-    capital = cfg.capital
-    position = 0          # +qty = long, -qty = short
-    entry_price  = 0.0
-    entry_time   = ""
-    entry_strike = 0.0
-    entry_opt_type = ""
+    capital          = cfg.capital
+    initial_capital  = cfg.capital   # for fixed sizing mode
+    position         = 0
+    entry_price      = 0.0
+    entry_time       = ""
+    entry_strike     = 0.0
+    entry_opt_type   = ""
+    entry_dte        = 7
     high_since_entry = 0.0
     low_since_entry  = 0.0
 
-    for i, row in df.iterrows():
-        signal = int(row.get("signal", 0))
-        price  = float(row["close"])
-        ts     = str(row["timestamp"])
+    # Per-day trackers
+    current_day:       str = ""
+    trades_today:      int = 0
+    exited_today:      bool = False
 
-        is_opt, trade_price_row, strike_row, opt_type_row = _opt_fields(row)
-        # Equity instrument type always uses real close price, never synthetic option premium
-        if cfg.instrument_type.lower() == "equity":
-            is_opt, trade_price_row, strike_row, opt_type_row = False, price, 0.0, ""
+    is_intraday = cfg.interval.upper() in _INTRADAY_INTERVALS
+    n = len(df)
 
-        # ── Check stop-loss / trailing stop-loss for open positions ─────────
-        if position != 0:
-            check_price = trade_price_row if is_opt else price
-            exit_reason = _check_sl_tsl(
-                position, check_price, entry_price,
-                high_since_entry, low_since_entry,
-                cfg.sl_pct, cfg.tsl_pct, cfg.target_pct,
-            )
-            if exit_reason:
-                pnl = _calc_pnl(position, entry_price, check_price)
-                trades.append(Trade(
-                    entry_time=entry_time, exit_time=ts,
-                    symbol=cfg.symbol,
-                    side="BUY" if position > 0 else "SELL",
-                    entry_price=entry_price, exit_price=check_price,
-                    quantity=abs(position), pnl=pnl, exit_reason=exit_reason,
-                    atm_strike=entry_strike, option_type=entry_opt_type,
-                ))
-                capital += pnl
-                position = 0
-
-        # ── Update trailing reference prices ────────────────────────────────
-        _trail = trade_price_row if is_opt else price
-        if position > 0:
-            high_since_entry = max(high_since_entry, _trail)
-        elif position < 0:
-            low_since_entry = min(low_since_entry, _trail)
-
-        # ── Process strategy signal (BUYER ONLY — long positions only) ─────
-        entry_signal = signal in (1, 2)
-        exit_signal  = signal in (-1, -2)
-
-        if entry_signal and position == 0:
-            t_price = trade_price_row if is_opt else price
-            qty = _position_size(capital, t_price, lot_size, cfg.position_size_pct)
-            if qty > 0:
-                position        = qty
-                entry_price     = t_price
-                entry_time      = ts
-                entry_strike    = strike_row
-                entry_opt_type  = opt_type_row
-                high_since_entry = t_price
-
-        elif exit_signal and position > 0:
-            x_price = trade_price_row if is_opt else price
-            pnl = _calc_pnl(position, entry_price, x_price)
-            trades.append(Trade(
-                entry_time=entry_time, exit_time=ts,
-                symbol=cfg.symbol, side="BUY",
-                entry_price=entry_price, exit_price=x_price,
-                quantity=abs(position), pnl=pnl, exit_reason="SIGNAL",
-                atm_strike=entry_strike, option_type=entry_opt_type,
-            ))
-            capital += pnl
-            position = 0
-
-    # ── Close any open position at end of data ───────────────────────────────
-    if position != 0 and len(df) > 0:
-        last_row = df.iloc[-1]
-        ts  = str(last_row["timestamp"])
-        is_opt_eod, eod_price, _, _ = _opt_fields(last_row)
-        final_price = eod_price if is_opt_eod else float(last_row["close"])
-        pnl = _calc_pnl(position, entry_price, final_price)
+    def _close_position(ts: str, price: float, reason: str) -> None:
+        nonlocal position, capital, high_since_entry, low_since_entry
+        side_exit = "SELL" if position > 0 else "BUY"
+        fill_px = _apply_slippage(price, side_exit, cfg.slippage_pct)
+        pnl = _calc_pnl(position, entry_price, fill_px)
         trades.append(Trade(
             entry_time=entry_time, exit_time=ts,
             symbol=cfg.symbol,
             side="BUY" if position > 0 else "SELL",
-            entry_price=entry_price, exit_price=final_price,
-            quantity=abs(position), pnl=pnl, exit_reason="EOD",
+            entry_price=entry_price, exit_price=fill_px,
+            quantity=abs(position), pnl=pnl, exit_reason=reason,
             atm_strike=entry_strike, option_type=entry_opt_type,
         ))
+        capital += pnl
+        position = 0
+        high_since_entry = 0.0
+        low_since_entry  = 0.0
+
+    for i in range(n):
+        row    = df.iloc[i]
+        signal = int(row.get("signal", 0))
+        close  = float(row["close"])
+        ts     = str(row["timestamp"])
+
+        is_opt, premium_close, strike_row, opt_type_row = _opt_fields(row)
+        if cfg.instrument_type.lower() == "equity":
+            is_opt, premium_close, strike_row, opt_type_row = False, close, 0.0, ""
+
+        trade_price = premium_close if is_opt else close
+        dte_row     = int(row.get("dte", 7)) if is_opt else 0
+
+        # ── Day boundary reset ──────────────────────────────────────────────
+        bar_info = _bar_time(ts)
+        day = bar_info[0] if bar_info else ts[:10]
+        if day != current_day:
+            current_day  = day
+            trades_today = 0
+            exited_today = False
+
+        # ── 1. Intraday square-off at 15:15 ────────────────────────────────
+        if position != 0 and is_intraday and _is_squareoff_bar(ts):
+            _close_position(ts, trade_price, "SQUAREOFF")
+            exited_today = True
+            trades_today += 1
+            continue   # skip signal processing for this bar
+
+        # ── 2. Intrabar SL / Target check for open positions ───────────────
+        if position != 0:
+            reason, fill_px_raw = _intrabar_exit(
+                row, position, entry_price,
+                high_since_entry, low_since_entry,
+                cfg.sl_pct, cfg.tsl_pct, cfg.target_pct,
+                is_opt, entry_opt_type, entry_dte,
+            )
+            if reason:
+                _close_position(ts, fill_px_raw, reason)
+                exited_today = True
+                trades_today += 1
+
+        # ── 3. Update trailing high / low ──────────────────────────────────
+        if position != 0:
+            ref = trade_price
+            if position > 0:
+                high_since_entry = max(high_since_entry, ref)
+            else:
+                low_since_entry  = min(low_since_entry,  ref)
+
+        # ── 4. Strategy exit signal (close-based, if not already stopped) ──
+        if signal in (-1, -2) and position > 0:
+            _close_position(ts, trade_price, "SIGNAL")
+            exited_today = True
+            trades_today += 1
+
+        # ── 5. Entry signal → fill at NEXT candle's open ───────────────────
+        can_enter = (
+            position == 0
+            and signal in (1, 2)
+            and (cfg.max_trades_per_day == 0 or trades_today < cfg.max_trades_per_day)
+            and (cfg.allow_reentry or not exited_today)
+            and (not is_intraday or not _is_squareoff_bar(ts))  # don't enter at/after 15:15
+        )
+        if can_enter:
+            if i + 1 < n:
+                next_row  = df.iloc[i + 1]
+                next_ts   = str(next_row["timestamp"])
+                # Don't enter if next bar is already a square-off bar
+                if is_intraday and _is_squareoff_bar(next_ts):
+                    pass
+                else:
+                    next_open = float(next_row.get("open", next_row["close"]))
+                    if is_opt:
+                        next_is_opt, next_prem, _, _ = _opt_fields(next_row)
+                        fill_raw = next_prem if next_is_opt else next_open
+                    else:
+                        fill_raw = next_open
+
+                    fill_px = _apply_slippage(fill_raw, "BUY", cfg.slippage_pct)
+                    # Fixed sizing: always size from initial capital (like Streak default)
+                    size_capital = initial_capital if cfg.position_sizing == "fixed" else capital
+                    qty = _position_size(size_capital, fill_px, lot_size, cfg.position_size_pct)
+                    if qty > 0:
+                        position         = qty
+                        entry_price      = fill_px
+                        entry_time       = next_ts
+                        entry_strike     = strike_row
+                        entry_opt_type   = opt_type_row
+                        entry_dte        = dte_row
+                        high_since_entry = fill_px
+                        low_since_entry  = fill_px
+
+    # ── 6. Close any open position at end of data ──────────────────────────
+    if position != 0 and n > 0:
+        last_row = df.iloc[-1]
+        ts = str(last_row["timestamp"])
+        is_opt_eod, eod_price, _, _ = _opt_fields(last_row)
+        raw_price = eod_price if is_opt_eod else float(last_row["close"])
+        _close_position(ts, raw_price, "EOD")
 
     return trades
 
@@ -354,39 +596,6 @@ def _simulate(
 # ─────────────────────────────────────────────────────────────────────────────
 #  Helpers
 # ─────────────────────────────────────────────────────────────────────────────
-
-def _check_sl_tsl(
-    position: int,
-    price: float,
-    entry_price: float,
-    high_since_entry: float,
-    low_since_entry: float,
-    sl_pct: float,
-    tsl_pct: float,
-    target_pct: float = 0.0,
-) -> Optional[str]:
-    if position > 0:
-        # Target
-        if target_pct > 0 and price >= entry_price * (1 + target_pct / 100):
-            return "TARGET"
-        # Fixed SL
-        if sl_pct > 0 and price <= entry_price * (1 - sl_pct / 100):
-            return "SL"
-        # Trailing SL
-        if tsl_pct > 0 and price <= high_since_entry * (1 - tsl_pct / 100):
-            return "TSL"
-    elif position < 0:
-        # Target
-        if target_pct > 0 and price <= entry_price * (1 - target_pct / 100):
-            return "TARGET"
-        # Fixed SL
-        if sl_pct > 0 and price >= entry_price * (1 + sl_pct / 100):
-            return "SL"
-        # Trailing SL
-        if tsl_pct > 0 and price >= low_since_entry * (1 + tsl_pct / 100):
-            return "TSL"
-    return None
-
 
 def _calc_pnl(position: int, entry_price: float, exit_price: float) -> float:
     return (exit_price - entry_price) * position

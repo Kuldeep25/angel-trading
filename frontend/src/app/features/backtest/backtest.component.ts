@@ -28,6 +28,13 @@ export class BacktestComponent implements OnInit, OnDestroy {
   slPct     = 0;   // 0 → use strategy default
   tslPct    = 0;   // 0 → disabled
   targetPct = 0;   // 0 → disabled
+  slippagePct = 0.05;  // slippage % per fill
+  // Advanced settings
+  showAdvanced       = false;
+  positionSizing     = 'fixed';       // fixed | compounding
+  maxTradesPerDay    = 0;
+  intradaySquareoff  = true;
+  allowReentry       = true;
 
   // Strategy-level defaults (from py class attributes)
   defaultSlPct:     number | null = null;
@@ -58,6 +65,22 @@ export class BacktestComponent implements OnInit, OnDestroy {
   running = false;
   reconnecting = false;
   isConnectionError = false;
+
+  // Bhavcopy downloader state
+  bhavFromDate   = '';
+  bhavToDate     = '';
+  bhavDownloading = false;
+  bhavStatus: any  = null;
+  bhavMessage      = '';
+  bhavError        = false;
+
+  // Angel One 5-min option OHLC importer state
+  angelImporting    = false;
+  angelImportStatus: any = null;
+  angelImportMsg    = '';
+  angelImportError  = false;
+  angelSymbols      = 'NIFTY,BANKNIFTY,FINNIFTY';
+  angelDaysBack     = 100;
   error = '';
   result: any = null;
 
@@ -82,6 +105,11 @@ export class BacktestComponent implements OnInit, OnDestroy {
     threeMonthsAgo.setMonth(today.getMonth() - 3);
     this.toDate = this.fmt(today);
     this.fromDate = this.fmt(threeMonthsAgo);
+    // Bhavcopy default: last 1 year
+    const oneYearAgo = new Date();
+    oneYearAgo.setFullYear(today.getFullYear() - 1);
+    this.bhavToDate   = this.fmt(today);
+    this.bhavFromDate = this.fmt(oneYearAgo);
   }
 
   ngOnInit(): void {
@@ -192,9 +220,14 @@ export class BacktestComponent implements OnInit, OnDestroy {
       from_date: this.fromDate,
       to_date: this.toDate,
       capital: this.capital,
-      sl_pct:     effectiveSl,
-      tsl_pct:    effectiveTsl,
-      target_pct: effectiveTarget
+      sl_pct:              effectiveSl,
+      tsl_pct:             effectiveTsl,
+      target_pct:          effectiveTarget,
+      slippage_pct:        this.slippagePct,
+      position_sizing:     this.positionSizing,
+      max_trades_per_day:  this.maxTradesPerDay,
+      intraday_squareoff:  this.intradaySquareoff,
+      allow_reentry:       this.allowReentry,
     };
     this.api.runBacktest(payload).subscribe({
       next: (res) => {
@@ -273,5 +306,65 @@ export class BacktestComponent implements OnInit, OnDestroy {
       { label: 'Max Drawdown',    value: s.max_drawdown.toFixed(2) + '%',     icon: 'bi-arrow-down-circle', cls: 'pnl-negative' },
       { label: 'Sharpe Ratio',    value: s.sharpe_ratio?.toFixed(2) ?? 'N/A', icon: 'bi-graph-up',          cls: (s.sharpe_ratio ?? 0) >= 1 ? 'pnl-positive' : '' },
     ];
+  }
+
+  downloadBhavcopy(): void {
+    if (!this.bhavFromDate || !this.bhavToDate) {
+      this.bhavMessage = 'Please set both From and To dates.';
+      this.bhavError = true;
+      return;
+    }
+    this.bhavDownloading = true;
+    this.bhavMessage = '';
+    this.bhavError = false;
+    this.api.downloadBhavcopy(this.bhavFromDate, this.bhavToDate).subscribe({
+      next: (res: any) => {
+        this.bhavDownloading = false;
+        this.bhavMessage = res.message + ' Check server logs for progress.';
+        this.bhavError = false;
+        // auto-refresh status after a moment
+        setTimeout(() => this.refreshBhavStatus(), 3000);
+      },
+      error: (e: any) => {
+        this.bhavDownloading = false;
+        this.bhavMessage = e?.error?.detail || 'Download request failed.';
+        this.bhavError = true;
+      },
+    });
+  }
+
+  refreshBhavStatus(): void {
+    this.api.getBhavcopySatus().subscribe({
+      next: (res: any) => { this.bhavStatus = res; },
+      error: () => { this.bhavStatus = { total_rows: 0 }; },
+    });
+  }
+
+  importAngelOhlc(): void {
+    const syms = this.angelSymbols.split(',').map(s => s.trim().toUpperCase()).filter(s => s);
+    if (!syms.length) { this.angelImportMsg = 'Enter at least one symbol.'; this.angelImportError = true; return; }
+    this.angelImporting = true;
+    this.angelImportMsg = '';
+    this.angelImportError = false;
+    this.api.importAngelOhlc(syms, this.angelDaysBack).subscribe({
+      next: (res: any) => {
+        this.angelImporting = false;
+        this.angelImportMsg = res.message || 'Import started in background.';
+        this.angelImportError = false;
+        setTimeout(() => this.refreshAngelStatus(), 4000);
+      },
+      error: (e: any) => {
+        this.angelImporting = false;
+        this.angelImportMsg = e?.error?.detail || 'Import request failed.';
+        this.angelImportError = true;
+      },
+    });
+  }
+
+  refreshAngelStatus(): void {
+    this.api.getAngelImportStatus().subscribe({
+      next: (res: any) => { this.angelImportStatus = res; },
+      error: () => {},
+    });
   }
 }

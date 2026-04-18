@@ -35,6 +35,8 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from backtest.option_pricer import add_bsm_premium
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  Strike-gap helpers
@@ -159,12 +161,10 @@ class Strategy:
         self,
         atr_period:  int   = 10,
         multiplier:  float = 3.0,
-        premium_pct: float = 0.015,
         strike_gap:  int | None = None,
     ) -> None:
         self.atr_period  = atr_period
         self.multiplier  = multiplier
-        self.premium_pct = premium_pct
         self.strike_gap  = strike_gap
 
     def generate(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -184,12 +184,13 @@ class Strategy:
         # Supertrend direction (+1 bullish, -1 bearish)
         direction = _supertrend(df, self.atr_period, self.multiplier)
 
-        # ATM strike + estimated premium per bar
+        # ATM strike per bar
         df["atm_strike"]  = df["close"].apply(lambda c: _atm_strike(c, gap))
-        df["atm_premium"] = (df["atm_strike"] * self.premium_pct).round(2)
-
-        # Map direction → option_type
+        # Map direction → option_type first (needed by BSM pricer for CE vs PE)
         df["option_type"] = direction.map({1: "CE", -1: "PE"}).fillna("CE")
+        # BSM pricing — one pass; uses the dominant direction (CE/PE varies per-bar
+        # but premium magnitude is similar for ATM calls vs puts, so we price as CE)
+        df = add_bsm_premium(df, option_type="CE")
 
         # ── Generate signals on direction flips ───────────────────────────
         df["signal"] = 0
