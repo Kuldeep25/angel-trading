@@ -1,0 +1,29 @@
+{
+  "use_trend_filter": true,
+
+  "entry_mode": "ATM",
+  "strike_offset": 0,
+
+  "confirmation_tf": "FIVE_MINUTE",
+  "entry_tf": "ONE_MINUTE",
+
+  "target_mode": "next_level",
+  "risk_reward": 2,
+
+  "sl_mode": "level_break",
+  "sl_percent": 20,
+
+  "use_tsl": false,
+  "tsl_mode": "percent",
+  "tsl_percent": 20,
+  "tsl_points": 10,
+
+  "exit_on_opposite_signal": true,
+  "trade_time_limit": "15:15",
+
+  "quantity_mode": "auto",
+  "fixed_lots": 1,
+  "capital": 100000,
+
+  "max_trades_per_day": 3
+}

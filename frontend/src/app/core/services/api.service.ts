@@ -152,4 +152,53 @@ export class ApiService {
   getVoiceCommands(): Observable<any> {
     return this.http.get(`${BASE}/voice/commands`);
   }
+
+  // ── Level Strategy ───────────────────────────────────────────────────────
+  getLevelAlerts(): Observable<any> {
+    return this.http.get(`${BASE}/level-strategy/alerts`);
+  }
+
+  postLevelAlert(payload: any): Observable<any> {
+    return this.http.post(`${BASE}/level-strategy/alert`, payload);
+  }
+
+  deleteLevelAlert(alertId: string): Observable<any> {
+    return this.http.delete(`${BASE}/level-strategy/alert/${alertId}`);
+  }
+
+  getLevelConfig(): Observable<any> {
+    return this.http.get(`${BASE}/level-strategy/config`);
+  }
+
+  saveLevelConfig(cfg: any): Observable<any> {
+    return this.http.put(`${BASE}/level-strategy/config`, cfg);
+  }
+
+  getLevelActiveTrades(): Observable<any> {
+    return this.http.get(`${BASE}/level-strategy/trades/active`);
+  }
+
+  getLevelHistory(limit = 100): Observable<any> {
+    return this.http.get(`${BASE}/level-strategy/trades/history?limit=${limit}`);
+  }
+
+  exitLevelTrade(tradeId: string): Observable<any> {
+    return this.http.post(`${BASE}/level-strategy/trades/exit/${tradeId}`, {});
+  }
+
+  getLevelSummary(): Observable<any> {
+    return this.http.get(`${BASE}/level-strategy/summary`);
+  }
+
+  startLevelMonitor(paper: boolean = true): Observable<any> {
+    return this.http.post(`${BASE}/level-strategy/start?paper=${paper}`, {});
+  }
+
+  stopLevelMonitor(): Observable<any> {
+    return this.http.post(`${BASE}/level-strategy/stop`, {});
+  }
+
+  runLevelBacktest(payload: any): Observable<any> {
+    return this.http.post(`${BASE}/level-strategy/backtest`, payload);
+  }
 }

@@ -109,6 +109,8 @@ async def lifespan(app: FastAPI):
 
     # ── Shutdown ─────────────────────────────────────────────────────
     logger.info("Shutting down…")
+    from level_strategy.engine import stop_monitor as _ls_stop_monitor
+    _ls_stop_monitor()
     await _oc_collector.stop()
     _guard_engine.stop()
     angel_client.disconnect()
@@ -139,16 +141,18 @@ app.add_middleware(
 # ── Routers ───────────────────────────────────────────────────────────────────
 from api.routes import ping, backtest, strategies, live, positions, voice, symbols, account  # noqa: E402
 from api.option_chain import router as _option_chain_router  # noqa: E402
+from api.routes import level_strategy as _level_strategy_router  # noqa: E402
 
-app.include_router(ping.router,             tags=["Health"])
-app.include_router(backtest.router,         tags=["Backtest"])
-app.include_router(strategies.router,       tags=["Strategies"])
-app.include_router(live.router,             tags=["Live Trading"])
-app.include_router(positions.router,        tags=["Positions"])
-app.include_router(account.router,          tags=["Account"])
-app.include_router(voice.router,            tags=["Voice"])
-app.include_router(symbols.router,          tags=["Symbols"])
-app.include_router(_option_chain_router,    tags=["Option Chain"])
+app.include_router(ping.router,                   tags=["Health"])
+app.include_router(backtest.router,               tags=["Backtest"])
+app.include_router(strategies.router,             tags=["Strategies"])
+app.include_router(live.router,                   tags=["Live Trading"])
+app.include_router(positions.router,              tags=["Positions"])
+app.include_router(account.router,                tags=["Account"])
+app.include_router(voice.router,                  tags=["Voice"])
+app.include_router(symbols.router,                tags=["Symbols"])
+app.include_router(_option_chain_router,          tags=["Option Chain"])
+app.include_router(_level_strategy_router.router, tags=["Level Strategy"])
 
 
 @app.post("/reconnect", tags=["Health"])

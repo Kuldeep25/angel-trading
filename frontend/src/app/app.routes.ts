@@ -26,5 +26,9 @@ export const routes: Routes = [
     path: 'voice',
     loadComponent: () => import('./features/voice/voice.component').then(m => m.VoiceComponent)
   },
+  {
+    path: 'level-strategy',
+    loadComponent: () => import('./features/level-strategy/level-strategy.component').then(m => m.LevelStrategyComponent)
+  },
   { path: '**', redirectTo: 'dashboard' }
 ];

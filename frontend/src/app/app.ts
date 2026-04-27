@@ -23,6 +23,7 @@ export class App implements OnInit, OnDestroy {
     { path: '/dashboard',       icon: 'bi-grid-1x2',        label: 'Dashboard' },
     { path: '/backtest',        icon: 'bi-bar-chart-line',   label: 'Backtest' },
     { path: '/live-trading',    icon: 'bi-activity',         label: 'Live Trading' },
+    { path: '/level-strategy',  icon: 'bi-layers',           label: 'Level Strategy' },
     { path: '/strategy-editor', icon: 'bi-code-square',      label: 'Strategy Editor' },
     { path: '/voice',           icon: 'bi-mic',              label: 'Voice Commands' },
   ];

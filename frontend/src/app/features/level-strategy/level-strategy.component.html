@@ -1,0 +1,607 @@
+<div class="container-fluid py-3">
+
+  <!-- Page header -->
+  <div class="d-flex align-items-center mb-3 gap-2">
+    <i class="bi bi-layers fs-4 text-primary"></i>
+    <h4 class="mb-0">Level Strategy</h4>
+    <span class="badge ms-2" [class]="monitorRunning ? 'bg-success' : 'bg-secondary'">
+      {{ monitorRunning ? 'Monitor Running' : 'Monitor Stopped' }}
+    </span>
+    <span class="badge" [class]="paper ? 'bg-warning text-dark' : 'bg-danger'">
+      {{ paper ? 'Paper' : 'Live' }}
+    </span>
+  </div>
+
+  @if (error) {
+    <div class="alert alert-danger alert-dismissible py-2" role="alert">
+      {{ error }}
+      <button type="button" class="btn-close" (click)="error=''"></button>
+    </div>
+  }
+
+  <div class="row g-3">
+
+    <!-- ── Left column ─────────────────────────────────────────────────── -->
+    <div class="col-lg-4">
+
+      <!-- Monitor Control -->
+      <div class="card bg-dark border-secondary mb-3">
+        <div class="card-header py-2 d-flex align-items-center gap-2">
+          <i class="bi bi-play-circle text-success"></i>
+          <strong>Monitor Control</strong>
+        </div>
+        <div class="card-body">
+          <div class="mb-3">
+            <label class="form-label small text-secondary">Mode</label>
+            <div class="d-flex gap-2">
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" id="modePaper" [(ngModel)]="paper" [value]="true" [disabled]="monitorRunning">
+                <label class="form-check-label" for="modePaper">Paper</label>
+              </div>
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" id="modeLive" [(ngModel)]="paper" [value]="false" [disabled]="monitorRunning">
+                <label class="form-check-label text-warning" for="modeLive">Live</label>
+              </div>
+            </div>
+          </div>
+          <div class="d-flex gap-2">
+            @if (!monitorRunning) {
+              <button class="btn btn-success btn-sm" (click)="startMonitor()" [disabled]="starting">
+                <i class="bi bi-play-fill me-1"></i>{{ starting ? 'Starting…' : 'Start Monitor' }}
+              </button>
+            } @else {
+              <button class="btn btn-danger btn-sm" (click)="stopMonitor()" [disabled]="stopping">
+                <i class="bi bi-stop-fill me-1"></i>{{ stopping ? 'Stopping…' : 'Stop Monitor' }}
+              </button>
+            }
+            <button class="btn btn-outline-secondary btn-sm" (click)="loadLive()">
+              <i class="bi bi-arrow-clockwise"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- PnL Summary -->
+      <div class="card bg-dark border-secondary mb-3">
+        <div class="card-header py-2 d-flex align-items-center gap-2">
+          <i class="bi bi-graph-up text-info"></i>
+          <strong>PnL Summary</strong>
+        </div>
+        <div class="card-body p-0">
+          <table class="table table-sm table-dark table-borderless mb-0">
+            <tbody>
+              <tr>
+                <td class="text-secondary small ps-3">Total Trades</td>
+                <td class="text-end pe-3 fw-bold">{{ summary.total_trades ?? '—' }}</td>
+              </tr>
+              <tr>
+                <td class="text-secondary small ps-3">Win Rate</td>
+                <td class="text-end pe-3 fw-bold">{{ summary.win_rate != null ? (summary.win_rate + '%') : '—' }}</td>
+              </tr>
+              <tr>
+                <td class="text-secondary small ps-3">Total PnL</td>
+                <td class="text-end pe-3 fw-bold" [class]="pnlClass(summary.total_pnl)">
+                  {{ summary.total_pnl != null ? ('₹' + summary.total_pnl) : '—' }}
+                </td>
+              </tr>
+              <tr>
+                <td class="text-secondary small ps-3">Max Drawdown</td>
+                <td class="text-end pe-3 text-danger">{{ summary.max_drawdown != null ? (summary.max_drawdown + '%') : '—' }}</td>
+              </tr>
+              <tr>
+                <td class="text-secondary small ps-3">Sharpe</td>
+                <td class="text-end pe-3">{{ summary.sharpe ?? '—' }}</td>
+              </tr>
+              <tr>
+                <td class="text-secondary small ps-3">Active Trades</td>
+                <td class="text-end pe-3 fw-bold text-warning">{{ summary.active_count ?? 0 }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Active Alerts -->
+      <div class="card bg-dark border-secondary">
+        <div class="card-header py-2 d-flex align-items-center justify-content-between">
+          <div class="d-flex align-items-center gap-2">
+            <i class="bi bi-bell text-warning"></i>
+            <strong>Active Levels</strong>
+            <span class="badge bg-secondary">{{ alerts.length }}</span>
+          </div>
+          <button class="btn btn-outline-secondary btn-sm py-0" (click)="loadAlerts()">
+            <i class="bi bi-arrow-clockwise"></i>
+          </button>
+        </div>
+        <div class="card-body p-0">
+          @if (alerts.length === 0) {
+            <p class="text-secondary small p-3 mb-0">No active levels. Send a TradingView alert to <code>POST /level-strategy/alert</code></p>
+          } @else {
+            <div class="table-responsive">
+              <table class="table table-sm table-dark table-hover mb-0">
+                <thead><tr>
+                  <th class="ps-3">Symbol</th><th>Level</th><th>Type</th><th>Next</th><th></th>
+                </tr></thead>
+                <tbody>
+                  @for (a of alerts; track a.id) {
+                    <tr>
+                      <td class="ps-3 fw-bold">{{ a.symbol }}</td>
+                      <td>{{ a.level }}</td>
+                      <td>
+                        <span class="badge" [class]="a.type === 'RESISTANCE' ? 'bg-danger' : 'bg-success'">
+                          {{ a.type }}
+                        </span>
+                      </td>
+                      <td class="text-secondary">{{ a.next_level || '—' }}</td>
+                      <td>
+                        <button class="btn btn-outline-danger btn-sm py-0 px-1" (click)="deleteAlert(a.id)" title="Remove">
+                          <i class="bi bi-trash3 small"></i>
+                        </button>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ── Right column ─────────────────────────────────────────────────── -->
+    <div class="col-lg-8">
+
+      <!-- Config Card -->
+      <div class="card bg-dark border-secondary mb-3">
+        <div class="card-header py-2 d-flex align-items-center justify-content-between">
+          <div class="d-flex align-items-center gap-2">
+            <i class="bi bi-gear text-secondary"></i>
+            <strong>Configuration</strong>
+          </div>
+          <button class="btn btn-primary btn-sm" (click)="saveConfig()" [disabled]="configSaving">
+            <i class="bi bi-floppy me-1"></i>{{ configSaving ? 'Saving…' : 'Save' }}
+          </button>
+        </div>
+        <div class="card-body">
+          @if (configMsg) {
+            <div class="alert py-1 small mb-2" [class]="configError ? 'alert-danger' : 'alert-success'">{{ configMsg }}</div>
+          }
+          <div class="row g-2">
+            <!-- Row 1 -->
+            <div class="col-sm-6 col-md-4">
+              <label class="form-label small text-secondary mb-1">Trend Filter</label>
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" [(ngModel)]="config.use_trend_filter" id="trendFilter">
+                <label class="form-check-label small" for="trendFilter">{{ config.use_trend_filter ? 'Enabled' : 'Disabled' }}</label>
+              </div>
+            </div>
+            <div class="col-sm-6 col-md-4">
+              <label class="form-label small text-secondary mb-1">Entry Mode</label>
+              <select class="form-select form-select-sm bg-dark text-light border-secondary" [(ngModel)]="config.entry_mode">
+                <option value="ATM">ATM</option>
+                <option value="ITM1">ITM1</option>
+                <option value="OTM1">OTM1</option>
+              </select>
+            </div>
+            <div class="col-sm-6 col-md-4">
+              <label class="form-label small text-secondary mb-1">Strike Offset</label>
+              <input type="number" class="form-control form-control-sm bg-dark text-light border-secondary" [(ngModel)]="config.strike_offset">
+            </div>
+            <!-- Row 2 -->
+            <div class="col-sm-6 col-md-4">
+              <label class="form-label small text-secondary mb-1">SL Mode</label>
+              <select class="form-select form-select-sm bg-dark text-light border-secondary" [(ngModel)]="config.sl_mode">
+                <option value="level_break">Level Break</option>
+                <option value="percent">Percent</option>
+              </select>
+            </div>
+            <div class="col-sm-6 col-md-4">
+              <label class="form-label small text-secondary mb-1">SL %</label>
+              <input type="number" class="form-control form-control-sm bg-dark text-light border-secondary" [(ngModel)]="config.sl_percent" [disabled]="config.sl_mode !== 'percent'">
+            </div>
+            <div class="col-sm-6 col-md-4">
+              <label class="form-label small text-secondary mb-1">Target Mode</label>
+              <select class="form-select form-select-sm bg-dark text-light border-secondary" [(ngModel)]="config.target_mode">
+                <option value="next_level">Next Level</option>
+                <option value="risk_reward">Risk:Reward</option>
+              </select>
+            </div>
+            <!-- Row 3 -->
+            <div class="col-sm-6 col-md-4">
+              <label class="form-label small text-secondary mb-1">Risk:Reward</label>
+              <input type="number" step="0.5" class="form-control form-control-sm bg-dark text-light border-secondary" [(ngModel)]="config.risk_reward">
+            </div>
+            <div class="col-sm-6 col-md-4">
+              <label class="form-label small text-secondary mb-1">Trade Time Limit</label>
+              <input type="time" class="form-control form-control-sm bg-dark text-light border-secondary" [(ngModel)]="config.trade_time_limit">
+            </div>
+            <div class="col-sm-6 col-md-4">
+              <label class="form-label small text-secondary mb-1">Max Trades/Day</label>
+              <input type="number" class="form-control form-control-sm bg-dark text-light border-secondary" [(ngModel)]="config.max_trades_per_day">
+            </div>
+            <!-- Row 4 -->
+            <div class="col-sm-6 col-md-4">
+              <label class="form-label small text-secondary mb-1">Trailing SL</label>
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" [(ngModel)]="config.use_tsl" id="useTsl">
+                <label class="form-check-label small" for="useTsl">{{ config.use_tsl ? 'Enabled' : 'Disabled' }}</label>
+              </div>
+            </div>
+            <div class="col-sm-6 col-md-4">
+              <label class="form-label small text-secondary mb-1">TSL Mode</label>
+              <select class="form-select form-select-sm bg-dark text-light border-secondary" [(ngModel)]="config.tsl_mode" [disabled]="!config.use_tsl">
+                <option value="percent">Percent</option>
+                <option value="points">Points</option>
+              </select>
+            </div>
+            <div class="col-sm-6 col-md-4">
+              <label class="form-label small text-secondary mb-1">TSL %</label>
+              <input type="number" class="form-control form-control-sm bg-dark text-light border-secondary" [(ngModel)]="config.tsl_percent" [disabled]="!config.use_tsl || config.tsl_mode !== 'percent'">
+            </div>
+            <!-- Row 5 -->
+            <div class="col-sm-6 col-md-4">
+              <label class="form-label small text-secondary mb-1">Exit on Opposite Signal</label>
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" [(ngModel)]="config.exit_on_opposite_signal" id="exitOpp">
+                <label class="form-check-label small" for="exitOpp">{{ config.exit_on_opposite_signal ? 'Yes' : 'No' }}</label>
+              </div>
+            </div>
+            <div class="col-sm-6 col-md-4">
+              <label class="form-label small text-secondary mb-1">Quantity Mode</label>
+              <select class="form-select form-select-sm bg-dark text-light border-secondary" [(ngModel)]="config.quantity_mode">
+                <option value="auto">Auto (from Capital)</option>
+                <option value="fixed">Fixed Lots</option>
+              </select>
+            </div>
+            <div class="col-sm-6 col-md-4">
+              @if (config.quantity_mode === 'fixed') {
+                <label class="form-label small text-secondary mb-1">Fixed Lots</label>
+                <input type="number" class="form-control form-control-sm bg-dark text-light border-secondary" [(ngModel)]="config.fixed_lots">
+              } @else {
+                <label class="form-label small text-secondary mb-1">Capital (₹)</label>
+                <input type="number" class="form-control form-control-sm bg-dark text-light border-secondary" [(ngModel)]="config.capital">
+              }
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Active Trades -->
+      <div class="card bg-dark border-secondary mb-3">
+        <div class="card-header py-2 d-flex align-items-center gap-2">
+          <i class="bi bi-activity text-warning"></i>
+          <strong>Active Trades</strong>
+          <span class="badge bg-warning text-dark">{{ activeTrades.length }}</span>
+        </div>
+        <div class="card-body p-0">
+          @if (activeTrades.length === 0) {
+            <p class="text-secondary small p-3 mb-0">No open trades.</p>
+          } @else {
+            <div class="table-responsive">
+              <table class="table table-sm table-dark table-hover mb-0">
+                <thead><tr>
+                  <th class="ps-3">Symbol</th><th>Type</th><th>Strike</th>
+                  <th>Entry</th><th>SL</th><th>Target</th><th>Live LTP</th><th>Paper</th><th></th>
+                </tr></thead>
+                <tbody>
+                  @for (t of activeTrades; track t.id) {
+                    <tr>
+                      <td class="ps-3 fw-bold">{{ t.symbol }}</td>
+                      <td><span class="badge" [class]="t.option_type === 'CE' ? 'bg-success' : 'bg-danger'">{{ t.option_type }}</span></td>
+                      <td>{{ t.strike }}</td>
+                      <td>{{ t.entry_price }}</td>
+                      <td class="text-danger">{{ t.sl }}</td>
+                      <td class="text-success">{{ t.target }}</td>
+                      <td>—</td>
+                      <td><span class="badge" [class]="t.paper ? 'bg-secondary' : 'bg-danger'">{{ t.paper ? 'Paper' : 'Live' }}</span></td>
+                      <td>
+                        <button class="btn btn-outline-danger btn-sm py-0 px-1" (click)="manualExit(t.id)" title="Manual Exit">
+                          <i class="bi bi-x-lg small"></i>
+                        </button>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        </div>
+      </div>
+
+      <!-- Trade History -->
+      <div class="card bg-dark border-secondary mb-3">
+        <div class="card-header py-2 d-flex align-items-center gap-2">
+          <i class="bi bi-clock-history text-secondary"></i>
+          <strong>Trade History</strong>
+          <span class="badge bg-secondary">{{ tradeHistory.length }}</span>
+        </div>
+        <div class="card-body p-0">
+          @if (tradeHistory.length === 0) {
+            <p class="text-secondary small p-3 mb-0">No closed trades yet.</p>
+          } @else {
+            <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+              <table class="table table-sm table-dark table-hover mb-0">
+                <thead class="sticky-top" style="background:#1a1a2e">
+                  <tr>
+                    <th class="ps-3">Symbol</th><th>Type</th><th>Entry</th><th>Exit</th>
+                    <th>PnL</th><th>Reason</th><th>Time</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (t of tradeHistory; track t.id) {
+                    <tr>
+                      <td class="ps-3 fw-bold">{{ t.symbol }}</td>
+                      <td><span class="badge" [class]="t.option_type === 'CE' ? 'bg-success' : 'bg-danger'">{{ t.option_type }}</span></td>
+                      <td>{{ t.entry_price }}</td>
+                      <td>{{ t.exit_price }}</td>
+                      <td [class]="pnlClass(t.net_pnl)" class="fw-bold">₹{{ t.net_pnl }}</td>
+                      <td><span class="badge bg-secondary small">{{ t.exit_reason }}</span></td>
+                      <td class="text-secondary small">{{ t.exit_time }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        </div>
+      </div>
+
+      <!-- Backtest -->
+      <div class="card bg-dark border-secondary">
+        <div class="card-header py-2 d-flex align-items-center gap-2">
+          <i class="bi bi-bar-chart-line text-info"></i>
+          <strong>Backtest</strong>
+          <span class="badge bg-secondary small">Replay with Angel One historical data</span>
+        </div>
+        <div class="card-body">
+
+          <!-- ── Backtest form ── -->
+          <div class="row g-2 mb-3">
+
+            <!-- Instrument Type -->
+            <div class="col-6 col-md-3">
+              <label class="form-label small text-secondary mb-1">Instrument Type</label>
+              <select class="form-select form-select-sm bg-dark text-light border-secondary"
+                      [(ngModel)]="btInstrumentType"
+                      (ngModelChange)="onBtInstrumentTypeChange()">
+                @for (t of instrumentTypes; track t.value) {
+                  <option [value]="t.value">{{ t.label }}</option>
+                }
+              </select>
+            </div>
+
+            <!-- Symbol typeahead -->
+            <div class="col-6 col-md-3" style="position:relative">
+              <label class="form-label small text-secondary mb-1">Symbol</label>
+              <div class="input-group input-group-sm">
+                <input class="form-control bg-dark text-light border-secondary"
+                       placeholder="Search…"
+                       [(ngModel)]="btSymbolQuery"
+                       (input)="onBtSymbolInput()"
+                       (focus)="onBtSymbolInput()"
+                       (blur)="hideBtDropdown()"
+                       autocomplete="off">
+                @if (btSymbolLoading) {
+                  <span class="input-group-text bg-dark border-secondary">
+                    <span class="spinner-border spinner-border-sm text-secondary"></span>
+                  </span>
+                }
+              </div>
+              @if (btShowDropdown && btSymbolResults.length > 0) {
+                <div class="symbol-dropdown">
+                  @for (item of btSymbolResults; track item.raw_symbol) {
+                    <div class="symbol-item" (mousedown)="selectBtSymbol(item)">
+                      <span class="symbol-name">{{ item.symbol }}</span>
+                      @if (item.lot_size > 1) {
+                        <span class="text-accent ms-auto small">Lot: {{ item.lot_size }}</span>
+                      }
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+
+            <!-- Exchange (read-only, auto) -->
+            <div class="col-6 col-md-3">
+              <label class="form-label small text-secondary mb-1">Exchange <span class="text-secondary" style="font-size:0.75em">(auto)</span></label>
+              <input class="form-control form-control-sm border-secondary"
+                     [value]="btExchange" readonly tabindex="-1"
+                     style="background:transparent;cursor:default;color:#8b949e;border-color:#30363d;">
+            </div>
+
+            <!-- Interval -->
+            <div class="col-6 col-md-3">
+              <label class="form-label small text-secondary mb-1">Interval</label>
+              <select class="form-select form-select-sm bg-dark text-light border-secondary" [(ngModel)]="btInterval">
+                @for (i of intervals; track i) { <option>{{ i }}</option> }
+              </select>
+            </div>
+
+            <!-- From / To -->
+            <div class="col-6 col-md-3">
+              <label class="form-label small text-secondary mb-1">From</label>
+              <input type="date" class="form-control form-control-sm bg-dark text-light border-secondary" [(ngModel)]="btFromDate">
+            </div>
+            <div class="col-6 col-md-3">
+              <label class="form-label small text-secondary mb-1">To</label>
+              <input type="date" class="form-control form-control-sm bg-dark text-light border-secondary" [(ngModel)]="btToDate">
+            </div>
+
+            <!-- Use active alerts toggle -->
+            <div class="col-12 col-md-6 d-flex align-items-end pb-1 gap-3">
+              <div class="form-check form-switch mb-0">
+                <input class="form-check-input" type="checkbox" id="useAlerts" [(ngModel)]="btUseCurrentAlerts">
+                <label class="form-check-label small" for="useAlerts">
+                  Use active levels for <strong>{{ btSymbolQuery || 'symbol' }}</strong>
+                  <span class="text-secondary ms-1">({{ alerts.length }} loaded)</span>
+                </label>
+              </div>
+              <button class="btn btn-info btn-sm ms-auto" (click)="runBacktest()" [disabled]="btRunning">
+                <i class="bi me-1" [class.bi-play-fill]="!btRunning" [class.bi-hourglass-split]="btRunning"></i>
+                {{ btRunning ? 'Running…' : 'Run Backtest' }}
+              </button>
+            </div>
+
+            <!-- Manual levels JSON (only when not using active alerts) -->
+            @if (!btUseCurrentAlerts) {
+              <div class="col-12">
+                <label class="form-label small text-secondary mb-1">
+                  S/R Levels (JSON array)
+                  <span class="text-secondary ms-1" style="font-size:0.75em">
+                    — <code>&#x5B;&#x7B;"level": 23500, "type": "RESISTANCE", "next_level": 23600&#x7D;&#x5D;</code>
+                  </span>
+                </label>
+                <textarea class="form-control form-control-sm bg-dark text-light border-secondary font-monospace"
+                          rows="3" [(ngModel)]="btLevels"></textarea>
+              </div>
+            }
+
+          </div><!-- /form row -->
+
+          <!-- Error / No-alert states -->
+          @if (btError) {
+            <div class="alert alert-danger py-2 small mb-3">
+              <i class="bi bi-exclamation-triangle me-2"></i>{{ btError }}
+            </div>
+          }
+          @if (btNoAlert) {
+            <div class="alert alert-warning py-3 text-center mb-3">
+              <i class="bi bi-bell-slash fs-4 d-block mb-2"></i>
+              <strong>No alerts found for "{{ btSymbol }}"</strong>
+              <div class="small text-secondary mt-1">
+                Either add levels via TradingView webhook or enter them manually in the JSON box above.
+              </div>
+            </div>
+          }
+
+          <!-- ── Results ── -->
+          @if (btResult) {
+
+            <!-- P&L group -->
+            <div class="metrics-group-label">P &amp; L</div>
+            <div class="row g-2 mb-3">
+              @for (m of metricCards().slice(0, 5); track m.label) {
+                <div class="col-6 col-sm-4 col-md">
+                  <div class="metric-tile">
+                    <div class="metric-label"><i class="bi {{ m.icon }} me-1"></i>{{ m.label }}</div>
+                    <div class="metric-value" [ngClass]="m.cls">{{ m.value }}</div>
+                  </div>
+                </div>
+              }
+            </div>
+
+            <!-- Trade stats group -->
+            <div class="metrics-group-label">Trade Statistics</div>
+            <div class="row g-2 mb-3">
+              @for (m of metricCards().slice(5, 10); track m.label) {
+                <div class="col-6 col-sm-4 col-md">
+                  <div class="metric-tile">
+                    <div class="metric-label"><i class="bi {{ m.icon }} me-1"></i>{{ m.label }}</div>
+                    <div class="metric-value" [ngClass]="m.cls">{{ m.value }}</div>
+                  </div>
+                </div>
+              }
+            </div>
+
+            <!-- Risk group -->
+            <div class="metrics-group-label">Risk</div>
+            <div class="row g-2 mb-3">
+              @for (m of metricCards().slice(10, 12); track m.label) {
+                <div class="col-6 col-sm-4 col-md">
+                  <div class="metric-tile">
+                    <div class="metric-label"><i class="bi {{ m.icon }} me-1"></i>{{ m.label }}</div>
+                    <div class="metric-value" [ngClass]="m.cls">{{ m.value }}</div>
+                  </div>
+                </div>
+              }
+            </div>
+
+            <!-- Equity curve -->
+            @if (btResult.equity_curve?.length > 0) {
+              <div class="card mb-3" style="background:rgba(255,255,255,0.03);border-color:#30363d">
+                <div class="card-header py-2 small text-secondary"><i class="bi bi-graph-up me-2"></i>Equity Curve</div>
+                <div class="card-body" style="height: 220px;">
+                  <canvas baseChart [data]="chartData" [options]="chartOptions" type="line" style="height:100%"></canvas>
+                </div>
+              </div>
+            }
+
+            <!-- Trade log -->
+            <div class="card" style="background:rgba(255,255,255,0.03);border-color:#30363d">
+              <div class="card-header py-2 d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-table me-2"></i>Trade Log</span>
+                <span class="badge bg-secondary">{{ btResult.trades?.length ?? 0 }} trades</span>
+              </div>
+              @if (!btResult.trades?.length) {
+                <div class="card-body text-center text-secondary py-4">
+                  <i class="bi bi-inbox fs-3 d-block mb-2"></i>
+                  No trades generated. Try widening the date range or adjusting SL/config settings.
+                </div>
+              }
+              @if (btResult.trades?.length > 0) {
+                <div class="table-responsive" style="max-height: 350px; overflow-y: auto;">
+                  <table class="table table-sm table-hover mb-0">
+                    <thead class="sticky-top">
+                      <tr>
+                        <th>#</th>
+                        <th>Entry Time</th>
+                        <th>Exit Time</th>
+                        <th>Type</th>
+                        <th>Level</th>
+                        <th>Entry ₹</th>
+                        <th>Exit ₹</th>
+                        <th>Qty</th>
+                        <th>Net ₹</th>
+                        <th>Reason</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (t of btResult.trades; track $index) {
+                        <tr [style.background-color]="(t.net_pnl ?? t.pnl) >= 0 ? 'rgba(63,185,80,0.07)' : 'rgba(248,81,73,0.07)'">
+                          <td class="text-secondary">{{ $index + 1 }}</td>
+                          <td class="text-secondary small">{{ t.entry_time }}</td>
+                          <td class="text-secondary small">{{ t.exit_time }}</td>
+                          <td>
+                            <span class="badge"
+                                  [class.bg-success]="t.option_type==='CE'"
+                                  [class.bg-danger]="t.option_type==='PE'">{{ t.option_type }}</span>
+                          </td>
+                          <td class="fw-semibold text-info">{{ t.level }}</td>
+                          <td>{{ t.entry_price | number:'1.2-2' }}</td>
+                          <td>{{ t.exit_price | number:'1.2-2' }}</td>
+                          <td>{{ t.quantity }}
+                            @if (t.lot_size > 1) {
+                              <span class="text-secondary small">({{ t.lots }}×{{ t.lot_size }})</span>
+                            }
+                          </td>
+                          <td [ngClass]="pnlClass(t.net_pnl ?? t.pnl)" style="font-weight:700">
+                            {{ (t.net_pnl ?? t.pnl) >= 0 ? '+' : '' }}₹{{ (t.net_pnl ?? t.pnl) | number:'1.0-0' }}
+                          </td>
+                          <td>
+                            <span class="badge"
+                                  [class.bg-success]="t.exit_reason==='target'"
+                                  [class.bg-danger]="t.exit_reason==='sl'"
+                                  [class.bg-warning]="t.exit_reason==='tsl'"
+                                  [class.bg-primary]="t.exit_reason==='opposite_signal'"
+                                  [class.bg-secondary]="t.exit_reason==='time_limit'||t.exit_reason==='end_of_data'">
+                              {{ t.exit_reason | uppercase }}
+                            </span>
+                          </td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              }
+            </div>
+
+          }<!-- /btResult -->
+
+        </div>
+      </div>
+
+    </div><!-- /right col -->
+  </div><!-- /row -->
+</div>
+
